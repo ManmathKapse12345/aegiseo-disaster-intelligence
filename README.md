@@ -130,7 +130,7 @@ and the UI under the content-security policy with no console errors.
 ## Share from this PC (free public link)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy	unnel\start-public.ps1   # add -Rebuild after UI changes
+powershell -ExecutionPolicy Bypass -File deploy\tunnel\start-public.ps1   # add -Rebuild after UI changes
 ```
 
 Builds the UI, serves UI + API from the local backend (your local data, including earlier
