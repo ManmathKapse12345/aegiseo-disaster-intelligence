@@ -127,6 +127,18 @@ automatically. Checked on the final build: health and readiness through nginx,
 spatial `ST_Intersects` queries on the generated columns, a complete analysis with PDF report,
 and the UI under the content-security policy with no console errors.
 
+## Share from this PC (free public link)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy	unnel\start-public.ps1   # add -Rebuild after UI changes
+```
+
+Builds the UI, serves UI + API from the local backend (your local data, including earlier
+analyses) and opens a `https://*.trycloudflare.com` link through a Cloudflare quick tunnel - no
+account needed ([cloudflared](https://github.com/cloudflare/cloudflared/releases) must be
+installed or in `%LOCALAPPDATA%\cloudflared`). The link changes on every start and works only
+while the window is open. `-Auth` requires sign-in with tokens from `AEGIS_API_TOKENS`.
+
 ## Deploy to Hugging Face Spaces (free demo hosting)
 
 A single-container image ([deploy/huggingface/Dockerfile](deploy/huggingface/Dockerfile))
