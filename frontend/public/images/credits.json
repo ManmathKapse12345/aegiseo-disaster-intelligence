@@ -1,0 +1,45 @@
+{
+  "hero-sindh-2022": {
+    "date": "2022-09-10",
+    "items": [
+      "S2A_MSIL2A_20220910T055651_R091_T42RVQ_20220911T192041",
+      "S2A_MSIL2A_20220910T055651_R091_T42RUQ_20220911T171253"
+    ],
+    "credit": "Contains modified Copernicus Sentinel data 2022"
+  },
+  "case-sindh-2022": {
+    "date": "2022-09-10",
+    "items": [
+      "S2A_MSIL2A_20220910T055651_R091_T42RUQ_20220911T171253"
+    ],
+    "credit": "Contains modified Copernicus Sentinel data 2022"
+  },
+  "case-emilia-2023": {
+    "date": "2023-05-23",
+    "items": [
+      "S2A_MSIL2A_20230523T100601_R022_T32TQQ_20230523T172938"
+    ],
+    "credit": "Contains modified Copernicus Sentinel data 2023"
+  },
+  "case-derna-2023": {
+    "date": "2023-09-12",
+    "items": [
+      "S2A_MSIL2A_20230912T090601_R050_T34SFB_20240825T094904"
+    ],
+    "credit": "Contains modified Copernicus Sentinel data 2023"
+  },
+  "case-palisades-2025": {
+    "date": "2025-02-01",
+    "items": [
+      "S2C_MSIL2A_20250201T183631_R027_T11SLT_20250201T210315"
+    ],
+    "credit": "Contains modified Copernicus Sentinel data 2025"
+  },
+  "case-wayanad-2024": {
+    "date": "2024-12-16",
+    "items": [
+      "S2A_MSIL2A_20241216T052231_R062_T43PFN_20241216T085751"
+    ],
+    "credit": "Contains modified Copernicus Sentinel data 2024"
+  }
+}

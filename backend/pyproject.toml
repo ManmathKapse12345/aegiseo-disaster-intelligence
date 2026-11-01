@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-eo"
+version = "1.0.0"
+description = "AegisEO - agentic multi-sensor disaster change detection and response-prioritization platform"
+readme = "../README.md"
+requires-python = ">=3.11,<3.14"
+license = { text = "MIT" }
+
+[tool.setuptools.packages.find]
+include = ["aegis*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "network: test performs real calls to external public APIs (deselect with -m 'not network')",
+    "slow: long-running test",
+    "model: requires trained model weights in models/",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:rasterio.*",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = ["S101", "S311", "B008", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S"]
+"scripts/*" = ["S"]
+
+[tool.coverage.run]
+source = ["aegis"]
+omit = ["aegis/ml/train.py"]

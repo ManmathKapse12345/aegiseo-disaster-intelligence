@@ -1,0 +1,35 @@
+# runtime data, caches, downloaded datasets, databases, generated artefacts
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# python
+**/.venv/
+**/__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/*.tmp.mjs
+
+# logs and local configuration
+*.log
+models/evaluation_log.txt
+.env
+.env.*
+!.env.example
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

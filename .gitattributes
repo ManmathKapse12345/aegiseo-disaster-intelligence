@@ -1,0 +1,6 @@
+# Keep LF everywhere (files are built into Linux containers); mark binaries explicitly.
+* text=auto eol=lf
+*.pt binary
+*.png binary
+*.jpg binary
+*.ico binary

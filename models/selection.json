@@ -1,0 +1,13 @@
+{
+  "model_variant": "gated_fusion_unet_v2",
+  "sar_specialist": "s1_unet",
+  "selected": "hybrid_gated_fusion_unet_v2+s1_unet",
+  "criterion": "mean IoU over ['as_is', 'cloud_50', 'no_s2', 'no_s1'] on the 'valid' split",
+  "scores": {
+    "hybrid_gated_fusion_unet_v2+s1_unet": 0.7566,
+    "hybrid_gated_fusion_unet+s1_unet": 0.7488,
+    "gated_fusion_unet_v2": 0.7374,
+    "early_fusion_unet": 0.7194,
+    "gated_fusion_unet": 0.719
+  }
+}
