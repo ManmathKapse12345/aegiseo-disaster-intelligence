@@ -52,6 +52,13 @@ async def lifespan(app: FastAPI):
     reset_job_manager()  # shut the pool down and let a later app instance start a fresh one
 
 
+# Same page policy that nginx sends in the compose deployment; applied when the API serves the UI itself.
+PAGE_CSP = ("default-src 'self'; img-src 'self' data: blob: https://tiles.maps.eox.at https://tiles.openfreemap.org; "
+            "connect-src 'self' https://tiles.openfreemap.org https://tiles.maps.eox.at; worker-src 'self' blob:; "
+            "style-src 'self' 'unsafe-inline'; font-src 'self' data: https://tiles.openfreemap.org; script-src 'self'")
+NO_FRAMING = "'none'"
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="AegisEO API", version=__version__, lifespan=lifespan,
@@ -82,7 +89,11 @@ def create_app() -> FastAPI:
         API_LATENCY.labels(request.method, route).observe(dt)
         response.headers["X-Request-ID"] = rid
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        ancestors = settings.frame_ancestors.strip()
+        if not route.startswith("/api"):
+            response.headers["Content-Security-Policy"] = f"{PAGE_CSP}; frame-ancestors {ancestors or NO_FRAMING}"
+        if not ancestors:
+            response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         if route.startswith("/api") and response.status_code >= 500:
             log.error("request failed", extra={"method": request.method, "route": route, "status": response.status_code})
@@ -117,7 +128,7 @@ def create_app() -> FastAPI:
     if dist.exists():
         app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
 
-        @app.get("/{path:path}", include_in_schema=False)
+        @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
         async def spa(path: str):
             target = (dist / path).resolve()
             if path and target.is_file() and dist.resolve() in target.parents:

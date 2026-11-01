@@ -168,3 +168,18 @@ def test_rate_limiting(monkeypatch):
     finally:
         monkeypatch.delenv("AEGIS_RATE_LIMIT_PER_MINUTE")
         reset_settings_cache()
+
+
+def test_framing_policy(client, monkeypatch):
+    page = client.get("/metrics")  # any non-API route carries the page policy
+    assert page.headers["x-frame-options"] == "DENY" and "frame-ancestors 'none'" in page.headers["content-security-policy"]
+    monkeypatch.setenv("AEGIS_FRAME_ANCESTORS", "https://huggingface.co")
+    reset_settings_cache()
+    try:
+        with TestClient(create_app()) as c:
+            r = c.get("/metrics")
+            assert "x-frame-options" not in r.headers
+            assert r.headers["content-security-policy"].endswith("frame-ancestors https://huggingface.co")
+    finally:
+        monkeypatch.delenv("AEGIS_FRAME_ANCESTORS")
+        reset_settings_cache()

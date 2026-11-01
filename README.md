@@ -127,6 +127,18 @@ automatically. Checked on the final build: health and readiness through nginx,
 spatial `ST_Intersects` queries on the generated columns, a complete analysis with PDF report,
 and the UI under the content-security policy with no console errors.
 
+## Deploy to Hugging Face Spaces (free demo hosting)
+
+A single-container image ([deploy/huggingface/Dockerfile](deploy/huggingface/Dockerfile))
+serves the UI and API on port 7860. Storage is temporary SQLite (analyses are lost when the
+Space restarts or sleeps); use Docker Compose for a persistent deployment.
+
+```bash
+pip install huggingface_hub
+hf auth login                                   # write token from huggingface.co/settings/tokens
+python deploy/huggingface/deploy.py aegiseo     # uploads git HEAD; the Space then builds (~10 min)
+```
+
 ## Configuration
 
 All settings are environment variables prefixed `AEGIS_` (see [.env.example](.env.example)):

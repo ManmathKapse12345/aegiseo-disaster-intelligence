@@ -35,6 +35,8 @@ class Settings(BaseSettings):
 
     # --- API / security ----------------------------------------------------------
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080"
+    # Origins allowed to embed the UI in a frame (e.g. "https://huggingface.co"); empty = no framing
+    frame_ancestors: str = ""
     auth_enabled: bool = False
     # "token=name:role" pairs separated by ';'  (roles: viewer, analyst, admin)
     api_tokens: SecretStr = SecretStr("")
