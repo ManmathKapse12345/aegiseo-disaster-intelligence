@@ -1,0 +1,6 @@
+# HTTPS reverse proxy; Caddy obtains and renews a Let's Encrypt certificate automatically.
+# SITE_ADDRESS is a domain pointing at this server, e.g. 203.0.113.7.sslip.io
+{$SITE_ADDRESS} {
+	encode gzip
+	reverse_proxy web:8080
+}
