@@ -4,7 +4,8 @@
 #
 # Builds the web UI (first run or -Rebuild), serves UI + API from the local backend on
 # 127.0.0.1:8000 with the normal data directory, and opens a https://*.trycloudflare.com link.
-# The link changes every time and works only while this window stays open. Ctrl+C stops both.
+# The link changes on every start (and if Cloudflare drops the tunnel, a new one opens
+# automatically; the current link is always in data\public-url.txt). Ctrl+C stops both.
 # -Auth turns on sign-in (tokens from AEGIS_API_TOKENS in .env); without it the site is open.
 param([switch]$Rebuild, [switch]$Auth)
 $ErrorActionPreference = "Stop"
@@ -41,26 +42,38 @@ try {
     }
     if (-not $ok) { throw "Backend did not start - see data\public-api.log" }
 
-    Write-Host "Opening the Cloudflare tunnel..."
     $tlog = "$logs\public-tunnel.log"
-    Remove-Item $tlog -ErrorAction SilentlyContinue
-    $tunnel = Start-Process $cloudflared -ArgumentList "tunnel --no-autoupdate --url http://127.0.0.1:8000" `
-        -RedirectStandardError $tlog -RedirectStandardOutput "$logs\public-tunnel.out.log" -PassThru -WindowStyle Hidden
-    $url = $null
-    for ($i = 0; $i -lt 60 -and -not $url; $i++) {
-        Start-Sleep 1
-        if ($tunnel.HasExited) { throw "cloudflared exited - see data\public-tunnel.log" }
-        $m = Select-String -Path $tlog -Pattern "https://[a-z0-9-]+\.trycloudflare\.com" -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($m) { $url = $m.Matches[0].Value }
-    }
-    if (-not $url) { throw "No tunnel URL after 60 s - see data\public-tunnel.log" }
+    $urlFile = "$logs\public-url.txt"
+    # Quick tunnels can be dropped by Cloudflare (cloudflared then retries a dead tunnel forever),
+    # so a dead or deregistered tunnel is replaced by a new one - with a new link.
+    while (-not $api.HasExited) {
+        if ($tunnel -and -not $tunnel.HasExited) { Stop-Process -Id $tunnel.Id -Force }
+        Write-Host "Opening the Cloudflare tunnel..."
+        Remove-Item $tlog -ErrorAction SilentlyContinue
+        $tunnel = Start-Process $cloudflared -ArgumentList "tunnel --no-autoupdate --url http://127.0.0.1:8000" `
+            -RedirectStandardError $tlog -RedirectStandardOutput "$logs\public-tunnel.out.log" -PassThru -WindowStyle Hidden
+        $url = $null
+        for ($i = 0; $i -lt 60 -and -not $url -and -not $tunnel.HasExited; $i++) {
+            Start-Sleep 1
+            $m = Select-String -Path $tlog -Pattern "https://[a-z0-9-]+\.trycloudflare\.com" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($m) { $url = $m.Matches[0].Value }
+        }
+        if (-not $url) { Write-Warning "No tunnel link yet (see data\public-tunnel.log) - retrying in 30 s"; Start-Sleep 30; continue }
 
-    Write-Host ""
-    Write-Host "  AegisEO is public at:  $url" -ForegroundColor Green
-    Write-Host "  (sign-in required: $([bool]$Auth))  Keep this window open; press Ctrl+C to stop."
-    Write-Host ""
-    while (-not $api.HasExited -and -not $tunnel.HasExited) { Start-Sleep 2 }
-    Write-Warning "A process exited - see the logs in data\"
+        Set-Content -Path $urlFile -Value $url
+        Write-Host ""
+        Write-Host "  AegisEO is public at:  $url   ($(Get-Date -Format 'HH:mm'))" -ForegroundColor Green
+        Write-Host "  (sign-in required: $([bool]$Auth))  Keep this window open; press Ctrl+C to stop."
+        Write-Host ""
+        while (-not $api.HasExited -and -not $tunnel.HasExited) {
+            Start-Sleep 5
+            if (Select-String -Path $tlog -Pattern "Tunnel not found" -Quiet -ErrorAction SilentlyContinue) {
+                Write-Warning "Cloudflare dropped the tunnel - opening a new one (the link will change)"
+                break
+            }
+        }
+    }
+    Write-Warning "The backend exited - see data\public-api.log"
 }
 finally {
     foreach ($p in @($tunnel, $api)) { if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force } }
