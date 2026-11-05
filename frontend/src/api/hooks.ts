@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, patch, post } from "./client";
 import type {
-  Alert, AnalysisBrief, AnalysisDetail, CellProps, CreateAnalysis, Dashboard, LayerInfo, LiveEvent, Me, Passage, ReviewTask,
+  Alert, AnalysisBrief, AnalysisDetail, CellProps, CreateAnalysis, Dashboard, LayerInfo, LiveEvent, Me, Passage, Place, ReviewTask,
   Scenario, Source, Trace,
 } from "./types";
 
@@ -70,6 +70,16 @@ export const useBenchmark = (id?: string) =>
 export const useKnowledge = () => useQuery({ queryKey: ["knowledge"], queryFn: () => api<{ doc_id: string; title: string; tags: string[]; sections: { ref: string; section: string; text: string }[] }[]>("/api/knowledge"), staleTime: Infinity });
 export const useKnowledgeSearch = (q: string) =>
   useQuery({ queryKey: ["kb", q], queryFn: () => api<Passage[]>(`/api/knowledge/search?q=${encodeURIComponent(q)}`), enabled: q.trim().length >= 2 });
+
+/** Place search runs only for a submitted term (Nominatim forbids type-ahead); results are cached per term. */
+export const usePlaces = (term: string) =>
+  useQuery({
+    queryKey: ["places", term],
+    queryFn: () => api<{ results: Place[]; attribution: string }>(`/api/places?q=${encodeURIComponent(term)}&limit=6`, { timeoutMs: 20_000 }),
+    enabled: term.trim().length >= 2,
+    staleTime: Infinity,
+    retry: 0,
+  });
 
 function useInvalidate() {
   const qc = useQueryClient();

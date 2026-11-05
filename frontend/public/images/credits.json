@@ -41,5 +41,17 @@
       "S2A_MSIL2A_20241216T052231_R062_T43PFN_20241216T085751"
     ],
     "credit": "Contains modified Copernicus Sentinel data 2024"
+  },
+  "explain-sindh-2022": {
+    "analysis": "Sindh floods, Pakistan (2022)",
+    "before_date": "2022-06-27",
+    "after_date": "2022-08-31",
+    "panels": [
+      "before",
+      "after",
+      "change",
+      "priorities"
+    ],
+    "credit": "Contains modified Copernicus Sentinel data 2022; detection and priorities computed by AegisEO"
   }
 }

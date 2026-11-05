@@ -29,7 +29,8 @@ from aegis.db import Alert, Analysis, Detection, ExposedFeature, GuardrailCheck,
 
 log = logging.getLogger(__name__)
 
-CAT_COLORS = {"Critical": "#C62828", "High": "#EF6C00", "Moderate": "#F9A825", "Low": "#2E7D32"}
+# Same validated severity palette as the UI (docs/design.md); "Low" is teal so it reads as calm, not "safe".
+CAT_COLORS = {"Critical": "#C62828", "High": "#EF6C00", "Moderate": "#E9B308", "Low": "#2A9D8F"}
 INK, MUTED, ACCENT, LINE = "#16263A", "#5B6B7F", "#0E7C86", "#D9E1EA"
 ATTRIBUTION = [
     "Contains modified Copernicus Sentinel data (Sentinel-1 RTC and Sentinel-2 L2A via Microsoft Planetary Computer).",

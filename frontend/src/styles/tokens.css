@@ -1,96 +1,118 @@
-/* AegisEO design tokens - a bright, calm, professional light theme. */
+/*
+ * AegisEO design tokens - "calm atlas": warm paper, deep navy ink, one teal accent,
+ * an editorial serif for headings and a highly legible sans for everything else.
+ * Light theme only (a deliberate product decision: bright, calm, readable).
+ * Contrast of every text token was checked against --paper and --surface (>= 4.5:1).
+ */
 :root {
   color-scheme: light;
 
   /* surfaces */
-  --bg: #f4f7fa;
-  --bg-tint: #eef6f8;
+  --paper: #f7f5f0;
+  --paper-2: #efece4;
   --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --surface-3: #f1f5f9;
-  --chart-surface: #fcfcfb;
-  --line: #e3e9f0;
-  --line-strong: #cdd6e1;
-  --grid: #edf0f3;
+  --surface-2: #fbfaf7;
+  --surface-3: #f3f1ea;
+  --line: #e6e1d6;
+  --line-strong: #d3ccbd;
+  --grid: #ece8df;
 
   /* ink */
-  --ink: #0f1b2d;
-  --ink-2: #3c4a5e;
-  --ink-3: #66758a;
+  --ink: #15213b;
+  --ink-2: #3c4860;
+  --ink-3: #5c677a;
   --ink-inverse: #ffffff;
 
-  /* brand: ocean teal -> sky */
-  --brand: #0e7490;
-  --brand-600: #0b5f76;
-  --brand-700: #0a4d60;
-  --brand-50: #e7f6f9;
-  --brand-100: #cdeef4;
-  --sky: #0ea5e9;
-  --brand-gradient: linear-gradient(120deg, #0e7490 0%, #0ea5e9 55%, #6366f1 120%);
+  /* primary action = ink; accent = teal (links, progress, selection) */
+  --primary: #15213b;
+  --primary-hover: #24345a;
+  --accent: #0f6b66;
+  --accent-600: #0b5752;
+  --accent-soft: #e2f1ee;
+  --accent-soft-2: #c9e6e0;
+  --highlight: #f2b134;
 
-  /* chart categorical slots (validated, see docs/design.md) */
+  /* hazards */
+  --flood: #1f6fd1;
+  --flood-soft: #e5effb;
+  --wildfire: #d9480f;
+  --wildfire-soft: #fcebe3;
+  --landslide: #8a5a2b;
+  --landslide-soft: #f3ebe1;
+
+  /* chart categorical slots (validated in docs/design.md) */
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #eda100;
   --series-5: #e87ba4;
   --series-muted: #a8b3c2;
+  --chart-surface: #ffffff;
 
-  /* response priority (severity; always paired with icon + label) */
+  /* response priority (always paired with a word and an icon) */
   --p-critical: #c62828;
-  --p-critical-bg: #fdecec;
+  --p-critical-ink: #a31f1f;
+  --p-critical-bg: #fcebea;
   --p-high: #ef6c00;
-  --p-high-bg: #fff1e3;
+  --p-high-ink: #a64d00;
+  --p-high-bg: #fdf0e3;
   --p-moderate: #e9b308;
-  --p-moderate-bg: #fdf7dc;
+  --p-moderate-ink: #7a5c00;
+  --p-moderate-bg: #fbf5dc;
   --p-low: #2a9d8f;
-  --p-low-bg: #e6f5f3;
+  --p-low-ink: #1d6f65;
+  --p-low-bg: #e4f3f0;
 
-  /* status text colours (meet 4.5:1 on white) */
-  --ok: #15803d;
-  --ok-bg: #e9f7ee;
-  --warn: #9a5b00;
-  --warn-bg: #fff6e0;
-  --danger: #b91c1c;
-  --danger-bg: #fdecec;
-  --info: #1d4ed8;
-  --info-bg: #eaf0fe;
-  --synthetic: #7c3aed;
-  --synthetic-bg: #f3edfe;
+  /* status */
+  --ok: #1e7a3e;
+  --ok-bg: #e7f4ec;
+  --warn: #8a5a00;
+  --warn-bg: #fbf1dc;
+  --danger: #b42318;
+  --danger-bg: #fcebea;
+  --info: #1f4fb8;
+  --info-bg: #e8eefb;
+  --practice: #6d3bd6;
+  --practice-bg: #f1ebfd;
 
   /* type */
   --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Plus Jakarta Sans Variable", "Inter Variable", system-ui, sans-serif;
+  --font-display: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  --fs-xs: 0.75rem;
-  --fs-sm: 0.8125rem;
-  --fs-md: 0.9375rem;
-  --fs-lg: 1.0625rem;
-  --fs-xl: 1.375rem;
-  --fs-2xl: 1.75rem;
-  --fs-3xl: 2.375rem;
+  --fs-cap: 0.875rem; /* 14px - the smallest text anywhere */
+  --fs-sm: 0.9375rem; /* 15px */
+  --fs-body: 1.0625rem; /* 17px */
+  --fs-lg: 1.1875rem; /* 19px */
+  --fs-h4: 1.25rem; /* 20px */
+  --fs-h3: 1.5rem; /* 24px */
+  --fs-h2: clamp(1.75rem, 1.45rem + 1.1vw, 2.25rem);
+  --fs-h1: clamp(2.25rem, 1.7rem + 2.2vw, 3.25rem);
+  --fs-display: clamp(2.6rem, 1.75rem + 3.6vw, 4.6rem);
 
   /* geometry */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 14px;
-  --r-xl: 20px;
+  --r-xs: 8px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
   --sp-4: 16px;
-  --sp-5: 20px;
-  --sp-6: 24px;
-  --sp-8: 32px;
-  --sp-10: 40px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
 
-  /* elevation */
-  --shadow-1: 0 1px 2px rgba(15, 27, 45, 0.05), 0 1px 3px rgba(15, 27, 45, 0.06);
-  --shadow-2: 0 4px 14px rgba(15, 27, 45, 0.07), 0 1px 3px rgba(15, 27, 45, 0.05);
-  --shadow-3: 0 18px 48px rgba(15, 27, 45, 0.14);
-  --focus: 0 0 0 3px rgba(14, 116, 144, 0.32);
+  /* elevation (used sparingly) */
+  --shadow-1: 0 1px 2px rgba(21, 33, 59, 0.05);
+  --shadow-2: 0 10px 30px -12px rgba(21, 33, 59, 0.18), 0 2px 6px rgba(21, 33, 59, 0.05);
+  --shadow-3: 0 24px 60px -18px rgba(21, 33, 59, 0.32);
+  --focus: 0 0 0 3px var(--surface), 0 0 0 5px var(--accent);
 
-  --sidebar-w: 248px;
-  --topbar-h: 60px;
-  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --topbar-h: 72px;
+  --tabbar-h: 68px;
+  --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }

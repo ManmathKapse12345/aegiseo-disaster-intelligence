@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     )
     worldpop_stats_url: str = "https://api.worldpop.org/v1/services/stats"
     open_meteo_archive_url: str = "https://archive-api.open-meteo.com/v1/archive"
+    # place-name search (OpenStreetMap Nominatim; usage policy: <= 1 request/s, identifying User-Agent)
+    nominatim_url: str = "https://nominatim.openstreetmap.org/search"
     gdacs_url: str = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH"
     usgs_feed_url: str = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson"
     firms_public_url: str = "https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_Global_7d.csv"

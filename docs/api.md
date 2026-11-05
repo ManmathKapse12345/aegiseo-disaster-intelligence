@@ -20,6 +20,7 @@ requests are rate-limited per client (`AEGIS_RATE_LIMIT_PER_MINUTE`, HTTP 429 + 
 | GET | `/api/sources?refresh=` | Data-source catalogue with live health (cached 5 min) |
 | GET | `/api/events/live` | Current GDACS alerts and USGS M5.5+ earthquakes (cached 10 min) |
 | GET | `/api/scenarios` | Curated real and synthetic case studies |
+| GET | `/api/places?q=&limit=` | Find places by name (OpenStreetMap Nominatim) or parse typed `lat, lon`; returns name, context, point and bounding box. Server-side cache (7 days) and global spacing of 1 request/s per Nominatim's usage policy; 429 if the queue is busy, 503 with a plain message when unavailable |
 | POST | `/api/catalog/preview` | Sentinel-1/2 acquisitions for a bbox and windows (search only) |
 | GET | `/api/dashboard` | Aggregates: analyses, real-data impact, priorities, review backlog, agent metrics, activity |
 | GET | `/api/model` | Deployed model, training summaries, full evaluation, figures |

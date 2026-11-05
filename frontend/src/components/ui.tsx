@@ -1,46 +1,31 @@
-import { AlertCircle, CheckCircle2, FlaskConical, Info, Inbox, RefreshCw, X } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { AlertCircle, CheckCircle2, ChevronDown, FlaskConical, Info, RefreshCw, X } from "lucide-react";
+import {
+  createContext, useCallback, useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import type { AnalysisStatus, Category, Hazard } from "@/api/types";
-import { errorMessage } from "@/api/client";
-import { HAZARDS, PRIORITY, STATUS } from "@/lib/meta";
+import { CONFIDENCE, HAZARDS, PRIORITY, STATUS } from "@/lib/meta";
+import { friendlyError } from "@/lib/plain";
 
-export function Card({ title, sub, actions, children, className = "", pad = true, id }: {
-  title?: ReactNode; sub?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; pad?: boolean; id?: string;
-}) {
-  return (
-    <section className={`card ${className}`} id={id} aria-label={typeof title === "string" ? title : undefined}>
-      {(title || actions) && (
-        <header className="card-head">
-          <div className="grow">
-            {title && <h3>{title}</h3>}
-            {sub && <div className="sub">{sub}</div>}
-          </div>
-          {actions && <div className="row">{actions}</div>}
-        </header>
-      )}
-      <div className={pad ? "card-body" : ""}>{children}</div>
-    </section>
-  );
-}
-
+// ----------------------------------------------------------------------------- chips
 export function StatusChip({ status }: { status: AnalysisStatus }) {
   const m = STATUS[status] ?? STATUS.queued;
   return (
     <span className={`chip ${m.tone}`} title={m.help}>
-      {status === "running" ? <span className="spinner" style={{ width: 12, height: 12 }} aria-hidden /> : m.icon}
+      {status === "running" ? <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} aria-hidden /> : m.icon}
       {m.label}
     </span>
   );
 }
 
-export function PriorityChip({ category, override }: { category: Category; override?: boolean }) {
+export function PriorityChip({ category, override, short }: { category: Category; override?: boolean; short?: boolean }) {
   const p = PRIORITY[category];
   return (
     <span className={`chip prio prio-${category}`} title={p.meaning}>
       <span className="swatch" style={{ background: p.color }} aria-hidden />
       {category}
-      {override && <span className="muted" style={{ fontWeight: 500 }}>(override)</span>}
+      {short && <span style={{ fontWeight: 500 }}>· {p.short}</span>}
+      {override && <span style={{ fontWeight: 500 }}>(changed by a person)</span>}
     </span>
   );
 }
@@ -48,91 +33,138 @@ export function PriorityChip({ category, override }: { category: Category; overr
 export function HazardChip({ hazard }: { hazard: Hazard }) {
   const h = HAZARDS[hazard];
   return (
-    <span className="chip outline">
-      <span style={{ color: h.color, display: "inline-flex" }}>{h.icon(13)}</span>
+    <span className="chip" style={{ background: h.soft, color: "var(--ink)" }}>
+      <span style={{ color: h.color, display: "inline-flex" }}>{h.icon(15)}</span>
       {h.label}
     </span>
   );
 }
 
-export function SyntheticChip() {
+export function PracticeChip({ onImage }: { onImage?: boolean }) {
   return (
-    <span className="chip synthetic" title="Results come from a simulated scene and never describe a real place or event">
-      <FlaskConical size={13} aria-hidden /> Simulated data
+    <span className={`chip practice`} style={onImage ? { background: "rgba(255,255,255,.95)" } : undefined}
+      title="Made-up satellite data for practice and testing. It never shows a real place or event.">
+      <FlaskConical size={14} aria-hidden /> Practice data
     </span>
   );
 }
 
-export function ConfidenceChip({ level }: { level: string | null | undefined }) {
-  if (!level) return null;
-  const tone = level === "High" ? "ok" : level === "Medium" ? "info" : "warn";
-  return <span className={`chip ${tone}`} title="Overall confidence from model uncertainty, cross-method agreement and data completeness">{level} confidence</span>;
+export function ConfidenceMeter({ level, compact }: { level: string | null | undefined; compact?: boolean }) {
+  if (!level || !CONFIDENCE[level]) return null;
+  const c = CONFIDENCE[level];
+  if (compact) {
+    return (
+      <span className="chip outline" title={c.text}>
+        <span className={`sure-meter lvl-${c.level}`} aria-hidden style={{ gap: 2 }}>
+          <span style={{ width: 10, height: 6 }} /><span style={{ width: 10, height: 6 }} /><span style={{ width: 10, height: 6 }} />
+        </span>
+        {c.label} confidence
+      </span>
+    );
+  }
+  return (
+    <div className="sure" role="group" aria-label={`How sure we are: ${c.label}`}>
+      <span className={`sure-meter lvl-${c.level}`} aria-hidden><span /><span /><span /></span>
+      <div className="small">
+        <strong>How sure: {c.label}.</strong> <span className="ink-2">{c.text}</span>
+      </div>
+    </div>
+  );
 }
 
-export function InfoTip({ text, label = "More information" }: { text: string; label?: string }) {
+// ----------------------------------------------------------------------------- help
+export function InfoTip({ text, label = "What does this mean?" }: { text: string; label?: string }) {
   const id = useId();
   return (
-    <span className="info-tip" tabIndex={0} aria-describedby={id} aria-label={label} role="note">
-      <Info size={14} aria-hidden />
+    <span className="info-tip" tabIndex={0} aria-label={label} aria-describedby={id} role="button">
+      <Info size={16} aria-hidden />
       <span className="tip" id={id} role="tooltip">{text}</span>
     </span>
   );
 }
 
-export function Stat({ label, value, sub, icon, tip }: { label: string; value: ReactNode; sub?: ReactNode; icon?: ReactNode; tip?: string }) {
+export function Callout({ tone = "info", icon, children, title, role }: {
+  tone?: "info" | "warn" | "danger" | "ok" | "practice" | "neutral"; icon?: ReactNode; title?: ReactNode; children?: ReactNode; role?: string;
+}) {
   return (
-    <div className="card stat">
-      <div className="row between">
-        <span className="label">{label}{tip && <InfoTip text={tip} />}</span>
-        {icon && <span className="icon" aria-hidden>{icon}</span>}
+    <div className={`callout ${tone}`} role={role}>
+      {icon ?? (tone === "danger" || tone === "warn" ? <AlertCircle size={20} aria-hidden /> : <Info size={20} aria-hidden />)}
+      <div className="grow">
+        {title && <strong style={{ display: "block", marginBottom: children ? 2 : 0 }}>{title}</strong>}
+        {children}
       </div>
-      <div className="value">{value}</div>
-      {sub && <div className="sub">{sub}</div>}
     </div>
   );
 }
 
-export function Empty({ title, children, icon }: { title: string; children?: ReactNode; icon?: ReactNode }) {
+/** Progressive disclosure built on <details>, so it works with keyboard and screen readers out of the box. */
+export function Disclosure({ summary, children, defaultOpen, boxed, id }: {
+  summary: ReactNode; children: ReactNode; defaultOpen?: boolean; boxed?: boolean; id?: string;
+}) {
+  return (
+    <details className={`disclosure ${boxed ? "boxed" : ""}`} open={defaultOpen} id={id}>
+      <summary><span>{summary}</span><ChevronDown size={20} className="chev" aria-hidden /></summary>
+      <div className="disclosure-body">{children}</div>
+    </details>
+  );
+}
+
+// ----------------------------------------------------------------------------- states
+export function Empty({ title, children, icon, action }: { title: string; children?: ReactNode; icon?: ReactNode; action?: ReactNode }) {
   return (
     <div className="empty">
-      {icon ?? <Inbox size={36} aria-hidden />}
-      <strong style={{ color: "var(--ink-2)" }}>{title}</strong>
-      {children && <div className="small">{children}</div>}
+      {icon && <div className="empty-art">{icon}</div>}
+      <h3>{title}</h3>
+      {children && <div className="small" style={{ maxWidth: 520 }}>{children}</div>}
+      {action && <div style={{ marginTop: 8 }}>{action}</div>}
     </div>
   );
 }
 
-export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+export function ErrorState({ error, onRetry, title = "That didn't work" }: { error: unknown; onRetry?: () => void; title?: string }) {
   return (
-    <div className="banner danger" role="alert">
-      <AlertCircle size={18} aria-hidden />
+    <div className="callout danger" role="alert">
+      <AlertCircle size={20} aria-hidden />
       <div className="grow">
-        <strong>Something went wrong.</strong> {errorMessage(error)}
+        <strong>{title}.</strong> {friendlyError(error)}
       </div>
-      {onRetry && <button className="btn btn-sm" onClick={onRetry}><RefreshCw size={14} aria-hidden /> Retry</button>}
+      {onRetry && <button className="btn btn-sm" onClick={onRetry}><RefreshCw size={15} aria-hidden /> Try again</button>}
     </div>
   );
 }
 
 export function Loading({ label = "Loading" }: { label?: string }) {
   return (
-    <div className="row muted small" role="status" style={{ padding: 16 }}>
-      <span className="spinner" aria-hidden /> {label}...
+    <div className="loading" role="status">
+      <span className="spinner" aria-hidden /> {label}…
     </div>
   );
 }
 
-export function Skeleton({ h = 16, w = "100%" }: { h?: number; w?: number | string }) {
-  return <div className="skeleton" style={{ height: h, width: w }} aria-hidden />;
+export function Skeleton({ h = 16, w = "100%", r }: { h?: number; w?: number | string; r?: number }) {
+  return <div className="skeleton" style={{ height: h, width: w, borderRadius: r }} aria-hidden />;
 }
 
+// ----------------------------------------------------------------------------- modal
 export function Modal({ title, open, onClose, children, footer }: { title: string; open: boolean; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>("button, input, textarea, select, [tabindex]")?.focus();
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && onClose();
+    ref.current?.querySelector<HTMLElement>("input, textarea, select, button:not([data-close])")?.focus();
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "Tab" && ref.current) {
+        // keep keyboard focus inside the dialog
+        const els = [...ref.current.querySelectorAll<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")].filter((x) => !x.hasAttribute("disabled"));
+        if (!els.length) return;
+        const first = els[0];
+        const last = els[els.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
@@ -142,10 +174,10 @@ export function Modal({ title, open, onClose, children, footer }: { title: strin
   if (!open) return null;
   return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title} ref={ref}>
-        <div className="modal-head row between">
-          <h3>{title}</h3>
-          <button className="btn btn-ghost icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref}>
+        <div className="modal-head">
+          <h3 id={titleId}>{title}</h3>
+          <button className="btn btn-ghost icon-btn" onClick={onClose} aria-label="Close" data-close><X size={20} /></button>
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
@@ -155,18 +187,30 @@ export function Modal({ title, open, onClose, children, footer }: { title: strin
   );
 }
 
-export function Tabs<T extends string>({ tabs, value, onChange, label }: {
-  tabs: { id: T; label: ReactNode; badge?: number }[]; value: T; onChange: (t: T) => void; label: string;
+// ----------------------------------------------------------------------------- tabs
+export function Tabs<T extends string>({ tabs, value, onChange, label, variant = "pill", idBase }: {
+  tabs: { id: T; label: ReactNode; badge?: number; icon?: ReactNode }[]; value: T; onChange: (t: T) => void; label: string;
+  variant?: "pill" | "underline" | "grid"; idBase?: string;
 }) {
+  const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const i = tabs.findIndex((t) => t.id === value);
-    if (e.key === "ArrowRight") onChange(tabs[(i + 1) % tabs.length].id);
-    if (e.key === "ArrowLeft") onChange(tabs[(i - 1 + tabs.length) % tabs.length].id);
+    let next: number | null = null;
+    if (e.key === "ArrowRight") next = (i + 1) % tabs.length;
+    if (e.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
+    if (e.key === "Home") next = 0;
+    if (e.key === "End") next = tabs.length - 1;
+    if (next == null) return;
+    e.preventDefault();
+    onChange(tabs[next].id);
+    refs.current[tabs[next].id]?.focus();
   };
   return (
-    <div className="tabs" role="tablist" aria-label={label} onKeyDown={onKey}>
+    <div className={variant === "pill" ? "tabs" : variant === "grid" ? "tabs-grid" : "tabs-underline"} role="tablist" aria-label={label} onKeyDown={onKey}>
       {tabs.map((t) => (
-        <button key={t.id} role="tab" className="tab" aria-selected={t.id === value} tabIndex={t.id === value ? 0 : -1} onClick={() => onChange(t.id)}>
+        <button key={t.id} ref={(el) => { refs.current[t.id] = el; }} role="tab" className="tab" id={idBase ? `${idBase}-tab-${t.id}` : undefined}
+          aria-controls={idBase ? `${idBase}-panel` : undefined} aria-selected={t.id === value} tabIndex={t.id === value ? 0 : -1} onClick={() => onChange(t.id)}>
+          {t.icon}
           {t.label}
           {t.badge ? <span className="badge">{t.badge}</span> : null}
         </button>
@@ -175,6 +219,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: {
   );
 }
 
+// ----------------------------------------------------------------------------- toasts
 type Toast = { id: number; kind: "ok" | "error" | "info"; text: string };
 const ToastCtx = createContext<(kind: Toast["kind"], text: string) => void>(() => undefined);
 
@@ -182,8 +227,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const push = useCallback((kind: Toast["kind"], text: string) => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-3), { id, kind, text }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" ? 7000 : 4000);
+    setToasts((t) => [...t.slice(-2), { id, kind, text }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" ? 8000 : 5000);
   }, []);
   return (
     <ToastCtx.Provider value={push}>
@@ -191,8 +236,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toast-stack" role="status" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
-            {t.kind === "error" ? <AlertCircle size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden />}
-            <span>{t.text}</span>
+            {t.kind === "error" ? <AlertCircle size={18} aria-hidden /> : <CheckCircle2 size={18} aria-hidden />}
+            <span className="grow">{t.text}</span>
+            <button className="btn btn-ghost btn-sm icon-btn" style={{ color: "#fff", minHeight: 26, width: 26 }} aria-label="Dismiss"
+              onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={15} /></button>
           </div>
         ))}
       </div>
@@ -202,9 +249,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 export const useToast = () => useContext(ToastCtx);
 
+// ----------------------------------------------------------------------------- small layout helpers
 export function KV({ items }: { items: [ReactNode, ReactNode][] }) {
   return (
-    <dl className="kv">
+    <dl className="kv-list">
       {items.map(([k, v], i) => (
         <div key={i} style={{ display: "contents" }}>
           <dt>{k}</dt>
@@ -212,5 +260,18 @@ export function KV({ items }: { items: [ReactNode, ReactNode][] }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+export function PageHead({ eyebrow, title, lead, actions }: { eyebrow?: ReactNode; title: ReactNode; lead?: ReactNode; actions?: ReactNode }) {
+  return (
+    <header className="page-head">
+      <div style={{ maxWidth: 760 }}>
+        {eyebrow && <div className="eyebrow" style={{ marginBottom: 12 }}>{eyebrow}</div>}
+        <h1>{title}</h1>
+        {lead && <p className="lead">{lead}</p>}
+      </div>
+      {actions && <div className="row-wrap">{actions}</div>}
+    </header>
   );
 }

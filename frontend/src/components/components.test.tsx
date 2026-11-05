@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { ApiError } from "@/api/client";
 import { BarList, ContributionBars, PriorityDistribution, niceTicks } from "./charts";
-import { ErrorState, PriorityChip, StatusChip } from "./ui";
+import { ConfidenceMeter, ErrorState, PracticeChip, PriorityChip, StatusChip } from "./ui";
 
 describe("chart scales", () => {
   it("produces clean ticks covering the maximum", () => {
@@ -31,14 +31,19 @@ describe("charts", () => {
 });
 
 describe("ui", () => {
-  it("status and priority chips carry text labels", () => {
-    render(<><StatusChip status="needs_review" /><PriorityChip category="Critical" override /></>);
-    expect(screen.getByText("Needs review")).toBeInTheDocument();
+  it("status and priority chips use plain words", () => {
+    render(<><StatusChip status="needs_review" /><PriorityChip category="Critical" override /><PracticeChip /></>);
+    expect(screen.getByText("Needs a person to check")).toBeInTheDocument();
     expect(screen.getByText("Critical")).toBeInTheDocument();
-    expect(screen.getByText("(override)")).toBeInTheDocument();
+    expect(screen.getByText("(changed by a person)")).toBeInTheDocument();
+    expect(screen.getByText("Practice data")).toBeInTheDocument();
   });
-  it("error state shows the API message and validation details", () => {
+  it("confidence is explained, not just labelled", () => {
+    render(<ConfidenceMeter level="Low" />);
+    expect(screen.getByRole("group", { name: "How sure we are: Low" })).toHaveTextContent(/first guess/);
+  });
+  it("error state turns API errors into actionable text", () => {
     render(<ErrorState error={new ApiError("invalid request", 422, [{ field: "hazard", message: "unsupported" }])} />);
-    expect(screen.getByRole("alert")).toHaveTextContent("invalid request: hazard - unsupported");
+    expect(screen.getByRole("alert")).toHaveTextContent("Some choices need fixing: Type of disaster - unsupported.");
   });
 });

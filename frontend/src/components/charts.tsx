@@ -358,7 +358,7 @@ export function SimpleTable({ head, rows }: { head: string[]; rows: (string | nu
 
 export function Meter({ value, max = 1, tone = "brand", label }: { value: number; max?: number; tone?: "brand" | "warn" | "danger" | "ok"; label: string }) {
   const pct = Math.max(0, Math.min(1, value / max));
-  const colors = { brand: ["var(--brand)", "var(--brand-50)"], warn: ["var(--p-high)", "var(--p-high-bg)"], danger: ["var(--p-critical)", "var(--p-critical-bg)"], ok: ["var(--ok)", "var(--ok-bg)"] }[tone];
+  const colors = { brand: ["var(--accent)", "var(--accent-soft)"], warn: ["var(--p-high)", "var(--p-high-bg)"], danger: ["var(--p-critical)", "var(--p-critical-bg)"], ok: ["var(--ok)", "var(--ok-bg)"] }[tone];
   return (
     <div role="meter" aria-label={label} aria-valuenow={Math.round(pct * 100)} aria-valuemin={0} aria-valuemax={100}
       style={{ height: 8, background: colors[1], borderRadius: 999, overflow: "hidden" }}>

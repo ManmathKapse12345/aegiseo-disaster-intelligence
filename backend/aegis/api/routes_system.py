@@ -99,6 +99,22 @@ def scenarios() -> list[dict[str, Any]]:
     return SCENARIOS
 
 
+@router.get("/api/places")
+def places(q: str = Query(..., min_length=2, max_length=200), limit: int = Query(6, ge=1, le=10)) -> dict[str, Any]:
+    """Find places by name (OpenStreetMap Nominatim) or parse typed coordinates, to help choose an area."""
+    from aegis.sources.places import PlaceSearchBusyError, get_place_search
+
+    try:
+        results = get_place_search().search(q, limit=limit)
+    except PlaceSearchBusyError as exc:
+        raise HTTPException(429, "Place search is busy. Please try again in a few seconds.", headers={"Retry-After": "3"}) from exc
+    except SourceUnavailableError as exc:
+        raise HTTPException(503, "Place search is not available right now. You can still move the map by hand "
+                                 "or type coordinates such as 26.7, 67.8.") from exc
+    return {"query": q, "results": [p.as_dict() for p in results],
+            "attribution": "Search by OpenStreetMap Nominatim, data (c) OpenStreetMap contributors (ODbL)"}
+
+
 @router.post("/api/catalog/preview")
 def catalog_preview(body: CatalogPreview, who: Identity = Depends(require("viewer"))) -> dict[str, Any]:
     """Which Sentinel acquisitions exist for an AOI and windows (search only, no pixel reads)."""

@@ -116,6 +116,15 @@ SOURCES: list[dict[str, Any]] = [
         "url": "https://github.com/cloudtostreet/Sen1Floods11", "health": None,
     },
     {
+        "id": "nominatim", "name": "OpenStreetMap Nominatim (place search)", "provider": "OpenStreetMap Foundation",
+        "category": "service", "provides": "Finds places by name so an area can be chosen without typing coordinates",
+        "coverage": "Global", "spatial_resolution": "Place / boundary level", "temporal_resolution": "-",
+        "update_frequency": "Follows OpenStreetMap edits", "timeliness": "on demand",
+        "access": "Free public API (max 1 request/s; searches run on submit and are cached for a week)", "license": "ODbL 1.0",
+        "limitations": "Only finds places that are mapped and named in OpenStreetMap; not used by the analysis itself",
+        "url": "https://nominatim.org", "health": "nominatim",
+    },
+    {
         "id": "anthropic-claude", "name": "Claude (optional narrative)", "provider": "Anthropic", "category": "service",
         "provides": "Optional executive-summary drafting from verified facts (grounding-checked)", "coverage": "-",
         "spatial_resolution": "-", "temporal_resolution": "-", "update_frequency": "-", "timeliness": "on demand",
@@ -147,6 +156,10 @@ def _check(kind: str, settings: Settings, services: Any) -> dict[str, Any]:
                 r = {"status": "operational"}
         elif kind in ("gdacs", "usgs", "open_meteo"):
             r = services.feeds.health(kind)
+        elif kind == "nominatim":
+            from aegis.sources.places import get_place_search
+
+            r = get_place_search().health()
         elif kind == "firms":
             key = bool(settings.firms_map_key.get_secret_value())
             r = {"status": "operational" if not settings.offline else "unavailable",

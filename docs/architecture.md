@@ -11,7 +11,7 @@ split later.
 ```mermaid
 flowchart LR
   subgraph Browser
-    UI[React + MapLibre SPA<br/>overview · wizard · map workspace · HITL review]
+    UI[React + MapLibre SPA<br/>home · guided wizard · results · review · about]
   end
   subgraph API[FastAPI service · aegis]
     R[REST routers<br/>analyses · alerts · reviews · sources · model · benchmarks]
@@ -51,7 +51,7 @@ flowchart LR
 
 | Layer | Module | Responsibility |
 |---|---|---|
-| UI | `frontend/src` | Guided analysis wizard, map workspace (layers, swipe compare, popups), priorities with explanations, evidence/trace viewer, review queue, alerts, data-source health, model card and benchmarks. |
+| UI | `frontend/src` | Plain-language, guided interface: home with task choices, four-step "Check a place" wizard (case studies, live alerts or place search) with a guide panel, result page (short answer, map with before/after swipe, priority squares with reasons, people and places, evidence and the full agent trace behind disclosures), review of unsure findings and draft warnings, About / accuracy / data-source pages. Vocabulary in `lib/meta.tsx`, sentence generation from real values in `lib/plain.ts`; pages are code-split so the map library loads only where maps are shown. |
 | API | `aegis/api`, `aegis/main.py` | Validation (pydantic), auth (bearer tokens, roles), rate limiting, request IDs, uniform error envelopes, Prometheus metrics, security headers, safe file serving. |
 | Jobs | `aegis/jobs.py` | Runs analyses on a bounded pool; the DB row is the source of truth; queued runs are resubmitted and running runs marked `interrupted` after a restart. |
 | Agent | `aegis/agents/*` | Orchestrator, specialists, explicit state, tools, guardrails, memory/RAG, narrative, recorder. |

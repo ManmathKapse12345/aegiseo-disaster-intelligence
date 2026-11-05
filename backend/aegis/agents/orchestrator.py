@@ -25,6 +25,7 @@ from scipy import ndimage
 from shapely.geometry import shape
 
 from aegis.agents import guardrails as G
+from aegis.agents.memory import analyst_corrections
 from aegis.agents.recorder import CancelledError, TraceRecorder
 from aegis.agents.specialists import (
     DataAcquisitionAgent,
@@ -243,8 +244,7 @@ class AgentOrchestrator:
             except (ToolFailedError, ToolBlockedError):
                 cases = []
             self.state.memory["similar_cases"] = cases
-            notes = [d for c in cases for d in c["review_decisions"] if d.get("decision") in ("reject", "override")]
-            notes += [{"rejected_alert": r} for c in cases for r in c["rejected_alerts"]]
+            notes = analyst_corrections(cases)
             if notes:
                 self.state.flags.add("prior_analyst_corrections")
                 self.state.warnings.append(f"{len(notes)} analyst correction(s) recorded for earlier analyses of this area; "

@@ -117,6 +117,23 @@ def get_knowledge_base() -> KnowledgeBase:
         return _KB
 
 
+FALSE_POSITIVE_ALERT_NOTE = "rejected via review: false positive"
+FALSE_POSITIVE_OVERRIDE_PREFIX = "analyst: false positive"
+
+
+def analyst_corrections(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Human corrections recorded for earlier analyses: findings marked false positive, priorities changed by
+    analysts and alerts rejected. Side effects of a false-positive verdict (its auto-rejected alerts and the
+    cell it lowered to Low) are not counted again."""
+    notes: list[dict[str, Any]] = []
+    for c in cases:
+        notes += [{"false_positive": d} for d in c.get("review_decisions", []) if d.get("decision") == "false_positive"]
+        notes += [{"priority_override": o} for o in c.get("priority_overrides", [])
+                  if not str(o.get("reason") or "").startswith(FALSE_POSITIVE_OVERRIDE_PREFIX)]
+        notes += [{"rejected_alert": r} for r in c.get("rejected_alerts", []) if (r.get("note") or "") != FALSE_POSITIVE_ALERT_NOTE]
+    return notes
+
+
 def similar_cases(session: Session, bbox: tuple[float, float, float, float], hazard: str, exclude_id: str | None = None,
                   margin_deg: float = 0.25, limit: int = 5) -> list[dict[str, Any]]:
     """Earlier analyses overlapping the AOI (expanded by ``margin_deg``) with reviewer feedback."""

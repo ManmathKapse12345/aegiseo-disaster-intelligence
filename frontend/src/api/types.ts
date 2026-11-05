@@ -289,6 +289,15 @@ export interface Dashboard {
 
 export interface Me { user: string; role: "viewer" | "analyst" | "admin"; auth_enabled: boolean }
 
+export interface Place {
+  name: string;
+  context: string;
+  lat: number;
+  lon: number;
+  bbox: [number, number, number, number] | null;
+  kind: string;
+}
+
 export interface CreateAnalysis {
   name: string;
   hazard: Hazard;

@@ -23,6 +23,7 @@ Space; built entirely on public data (no private data assumed).
 | **Closed-loop agent** | Observe -> Perceive -> Semantic state -> Memory/RAG -> Reason/Plan -> Tool actions -> Guardrails/HITL -> Outcome -> Feedback, with an explicit goal, plan, typed facts, recorded decisions (rules P0-P9), 20 tools under a side-effect policy, 18 guardrails and a full trace. |
 | **Human in the loop** | Review queue (confirm / false positive / acknowledge / re-run), alert approval with publication guardrail, priority overrides with reasons, audit log, decisions remembered for later analyses. |
 | **Reporting** | Interactive map (overlays, before/after swipe, popups), PDF report, CSV priorities, GeoJSON, GeoTIFF products. |
+| **Plain-language, guided UI** | Home page with four starting points, a four-step "Check a place" wizard with a guide panel (past disasters, live alerts, or any place found by name via OpenStreetMap Nominatim), a one-sentence answer with key numbers before any detail, reasons written out for every priority square, technical detail and the full agent trace behind disclosures, and an About page. See [docs/design.md](docs/design.md). |
 | **Monitoring** | Live data-source health, Prometheus `/metrics`, structured logs, dashboard agent metrics (tool success, escalation, override, latency). |
 
 ## Results (Sen1Floods11, hand-labelled)
@@ -100,7 +101,8 @@ npm install
 npm run dev                       # http://localhost:5173 (proxies /api to :8000)
 ```
 
-Open http://localhost:5173, then **Try the offline demo** (simulated scene, ~10 s) or pick a
+Open http://localhost:5173. The home page explains what AegisEO does and offers four starting
+points; **Try a practice run** (made-up scene, works offline, under a minute) or pick a
 real case study (Sindh 2022 floods, Palisades Fire 2025, ...; 2-6 min with live data).
 
 The trained checkpoints are included in `models/`. To reproduce them:
@@ -167,10 +169,10 @@ deterministic, fully grounded templates are used). The UI shows these as "not co
 ## Tests
 
 ```bash
-cd backend && pytest                     # 79 tests, hermetic (offline, temp DB)
+cd backend && pytest                     # 88 tests (1 needs --network), hermetic (offline, temp DB)
 cd backend && pytest --network -m network # live Planetary Computer integration
 cd frontend && npm test                  # Vitest unit/component tests
-cd frontend && npx playwright test       # end-to-end (starts backend + frontend)
+cd frontend && npx playwright test       # end-to-end (starts backend + frontend; E2E_WEB_PORT / E2E_API_PORT move the ports)
 cd backend && python -m aegis.benchmark  # agent benchmark -> docs/benchmark_results.md
 cd backend && python scripts/acceptance_report.py --trace <id>  # docs/acceptance.md from real runs (API running)
 ```
@@ -195,7 +197,7 @@ model, cancellation) and end-to-end UI journeys on desktop and mobile.
 | [docs/acceptance.md](docs/acceptance.md) | Real-data end-to-end acceptance runs and a tool-call trace |
 | [docs/guardrail_test_cases.md](docs/guardrail_test_cases.md) | Guardrail / HITL test cases |
 | [docs/api.md](docs/api.md) | HTTP API |
-| [docs/design.md](docs/design.md) | UI design system and validated palettes |
+| [docs/design.md](docs/design.md) | UI principles, plain-language vocabulary, design system and validated palettes |
 | [docs/report.md](docs/report.md) | Final project report |
 
 ## Known limitations
@@ -212,6 +214,6 @@ model, cancellation) and end-to-end UI journeys on desktop and mobile.
 
 Contains modified Copernicus Sentinel data (via Microsoft Planetary Computer) · Copernicus DEM
 GLO-30 (c) DLR/Airbus · JRC Global Surface Water · ESA WorldCover (CC BY 4.0) · (c) OpenStreetMap
-contributors (ODbL) · HRSL, Meta & CIESIN (CC BY 4.0) · WorldPop (CC BY 4.0) · GDACS · USGS ·
+contributors (ODbL), place search by OpenStreetMap Nominatim · HRSL, Meta & CIESIN (CC BY 4.0) · WorldPop (CC BY 4.0) · GDACS · USGS ·
 NASA FIRMS · Open-Meteo/ERA5 · Sen1Floods11 (Bonafilia et al., 2020) · basemaps OpenFreeMap
 (OpenMapTiles, OSM data) and Sentinel-2 cloudless by EOX.
