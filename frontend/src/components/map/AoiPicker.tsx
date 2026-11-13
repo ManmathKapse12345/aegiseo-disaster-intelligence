@@ -7,6 +7,7 @@ import { type BBox, bboxAreaKm2 } from "@/lib/geo";
 import type { Place } from "@/api/types";
 import { friendlyError, areaPicture, areaVerdict } from "@/lib/plain";
 import { BASEMAPS, type BasemapId, getBaseStyle, setBasemap as applyBasemap } from "./basemap";
+import { ExpandMapButton, useMapExpand } from "./expand";
 
 export type { BBox };
 export { bboxAreaKm2 };
@@ -23,18 +24,22 @@ const FRAME = { x: 0.12, y: 0.14 };
 interface Props {
   value: BBox | null;
   onChange: (b: BBox, label?: string) => void;
+  /** Size limits from the server (GET /api/config, see lib/limits.ts). */
   maxKm2?: number;
+  minKm2?: number;
+  fullDetailKm2?: number;
   height?: number | string;
 }
 
 /**
  * Choose an area by (1) searching for a place, (2) moving the map until the frame covers it and
  * pressing "Use this area" - or by drawing a box. Works with mouse, touch and keyboard
- * (the map itself pans with the arrow keys and zooms with + / -).
+ * (the map itself pans with the arrow keys and zooms with + / -). "Expand map" makes it fill the window.
  */
-export function AoiPicker({ value, onChange, maxKm2 = 1500, height = 460 }: Props) {
+export function AoiPicker({ value, onChange, maxKm2 = 1500, minKm2 = 0.25, fullDetailKm2, height = 460 }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
+  const { expanded, toggle, setExpanded } = useMapExpand();
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<"frame" | "draw" | "chosen">(value ? "chosen" : "frame");
   const [basemap, setBasemap] = useState<BasemapId>("satellite");
@@ -147,6 +152,7 @@ export function AoiPicker({ value, onChange, maxKm2 = 1500, height = 460 }: Prop
       if (b[2] - b[0] > 1e-4 && b[3] - b[1] > 1e-4) {
         changeRef.current(b, placeLabel.current);
         setMode("chosen");
+        setExpanded(false); // back to the page, where the Continue button is
       }
     };
     map.on("mousedown", down);
@@ -163,7 +169,7 @@ export function AoiPicker({ value, onChange, maxKm2 = 1500, height = 460 }: Prop
       map.off("mouseup", up);
       map.off("touchend", up);
     };
-  }, [ready, mode]);
+  }, [ready, mode, setExpanded]);
 
   // ------------------------------------------------------------------ actions
   const search = (e: FormEvent) => {
@@ -190,6 +196,7 @@ export function AoiPicker({ value, onChange, maxKm2 = 1500, height = 460 }: Prop
     if (!b) return;
     changeRef.current(b, placeLabel.current);
     setMode("chosen");
+    setExpanded(false); // back to the page, where the Continue button is
   };
 
   const restartFrame = () => {
@@ -198,13 +205,13 @@ export function AoiPicker({ value, onChange, maxKm2 = 1500, height = 460 }: Prop
     if (map && value) map.fitBounds([[value[0], value[1]], [value[2], value[3]]], { padding: { top: 90, bottom: 90, left: 90, right: 90 }, duration: 500 });
   };
 
-  const verdictFrame = areaVerdict(frameKm2, maxKm2);
+  const verdictFrame = areaVerdict(frameKm2, maxKm2, minKm2, fullDetailKm2);
   const chosenKm2 = value ? bboxAreaKm2(value) : null;
-  const verdictChosen = areaVerdict(chosenKm2, maxKm2);
+  const verdictChosen = areaVerdict(chosenKm2, maxKm2, minKm2, fullDetailKm2);
 
   return (
     <div>
-      <div className="map-frame" style={{ height }}>
+      <div className={`map-frame ${expanded ? "map-expanded" : ""}`} style={{ height }}>
         <div ref={host} className="map-host" style={{ position: "absolute", inset: 0 }} role="application" aria-label="Map for choosing an area. Use arrow keys to move and plus or minus to zoom." />
         {noMap && <div className="empty" style={{ position: "absolute", inset: 0 }}><h3>The map can't be shown</h3><p className="small">This browser has WebGL turned off. Pick a past disaster or a current alert instead.</p></div>}
         {mode === "frame" && !noMap && (
@@ -235,8 +242,11 @@ export function AoiPicker({ value, onChange, maxKm2 = 1500, height = 460 }: Prop
               </div>
             )}
           </form>
-          <div className="map-pill" role="group" aria-label="Background map" style={{ marginLeft: "auto" }}>
-            {(Object.keys(BASEMAPS) as BasemapId[]).map((id) => <button key={id} type="button" aria-pressed={basemap === id} onClick={() => setBasemap(id)}>{BASEMAPS[id].label}</button>)}
+          <div className="row-wrap" style={{ marginLeft: "auto", justifyContent: "flex-end" }}>
+            <ExpandMapButton expanded={expanded} onToggle={toggle} />
+            <div className="map-pill" role="group" aria-label="Background map">
+              {(Object.keys(BASEMAPS) as BasemapId[]).map((id) => <button key={id} type="button" aria-pressed={basemap === id} onClick={() => setBasemap(id)}>{BASEMAPS[id].label}</button>)}
+            </div>
           </div>
         </div>
 
@@ -245,7 +255,7 @@ export function AoiPicker({ value, onChange, maxKm2 = 1500, height = 460 }: Prop
             <>
               <div className="area-badge" aria-live="polite">
                 <span>Inside the frame: <strong>{frameKm2 == null ? "-" : `${frameKm2 < 10 ? frameKm2.toFixed(1) : Math.round(frameKm2).toLocaleString("en")} km²`}</strong></span>
-                <span className={`chip ${verdictFrame.tone}`}>{verdictFrame.ok ? "Good size" : frameKm2 != null && frameKm2 > maxKm2 ? "Zoom in" : "Zoom out"}</span>
+                <span className={`chip ${verdictFrame.tone}`}>{verdictFrame.ok ? (verdictFrame.tone === "ok" ? "Good size" : "Large, but allowed") : frameKm2 != null && frameKm2 > maxKm2 ? "Too big: zoom in" : "Too small: zoom out"}</span>
               </div>
               <div className="row-wrap">
                 <button type="button" className="btn btn-sm" onClick={() => setMode("draw")}><Pencil size={15} aria-hidden /> Draw a box instead</button>
@@ -263,7 +273,7 @@ export function AoiPicker({ value, onChange, maxKm2 = 1500, height = 460 }: Prop
             <>
               <div className="area-badge" aria-live="polite">
                 <span>Your area: <strong>{chosenKm2! < 10 ? chosenKm2!.toFixed(1) : Math.round(chosenKm2!).toLocaleString("en")} km²</strong></span>
-                <span className={`chip ${verdictChosen.tone}`}>{verdictChosen.ok ? "Good size" : "Needs a change"}</span>
+                <span className={`chip ${verdictChosen.tone}`}>{verdictChosen.ok ? (verdictChosen.tone === "ok" ? "Good size" : "Large, but allowed") : "Needs a change"}</span>
               </div>
               <div className="row-wrap">
                 <button type="button" className="btn btn-sm" onClick={() => mapRef.current?.fitBounds([[value[0], value[1]], [value[2], value[3]]], { padding: 70, duration: 600 })}>

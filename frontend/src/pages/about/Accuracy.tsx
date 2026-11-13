@@ -9,8 +9,8 @@ import { useDocumentTitle } from "@/lib/hooks";
 import { friendlyError } from "@/lib/plain";
 import { CONDITIONS, METHOD_NAMES, accuracyHeadline } from "./accuracyData";
 
-const SERIES = [{ label: "Normal photos", color: "var(--series-1)" }, { label: "Half hidden by cloud", color: "var(--series-2)" },
-  { label: "No camera photos", color: "var(--series-3)" }, { label: "No radar photos", color: "var(--series-4)" }];
+const SERIES = [{ label: "Both image types", color: "var(--series-1)" }, { label: "Half hidden by cloud", color: "var(--series-2)" },
+  { label: "No optical images", color: "var(--series-3)" }, { label: "No radar images", color: "var(--series-4)" }];
 const ORDER = ["otsu_vh", "mndwi", "rule_fusion", "s1_unet", "s2_unet", "early_fusion_unet", "gated_fusion_unet", "gated_fusion_unet_v2",
   "hybrid_gated_fusion_unet+s1_unet", "hybrid_gated_fusion_unet_v2+s1_unet"];
 
@@ -19,7 +19,7 @@ export function Accuracy() {
   return (
     <div className="page page-enter">
       <Link to="/about" className="small" style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", marginBottom: 16 }}><ArrowLeft size={16} aria-hidden /> About</Link>
-      <PageHead title="How accurate is it?" lead="Two things were tested: how well the flood model finds water in photos it has never seen, and whether the whole system behaves safely when things go wrong." />
+      <PageHead title="How accurate is it?" lead="Two things were tested: how well the flood model finds water in images it never saw during training, and whether the whole system behaves safely when things go wrong." />
       <ModelEval />
       <section className="section"><AgentBench /></section>
     </div>
@@ -47,11 +47,11 @@ function ModelEval() {
     <div className="stack-lg">
       <div className="stat-band">
         <div><div className="sb-value">{h.overlap}%</div><div className="sb-label">overlap with flood maps drawn by experts, on {h.chips ?? "the"} test images it never saw while learning.</div></div>
-        <div><div className="sb-value">{h.noOptical == null ? "-" : `${h.noOptical}%`}</div><div className="sb-label">overlap when every camera photo is hidden (radar only) - floods often come with clouds.</div></div>
+        <div><div className="sb-value">{h.noOptical == null ? "-" : `${h.noOptical}%`}</div><div className="sb-label">overlap when no optical image is available (radar only), as under the thick cloud that often comes with floods.</div></div>
         <div><div className="sb-value">{h.calibration ?? "-"}</div><div className="sb-label">average gap between how sure it says it is and how often it is right (the set-up in use, test images).</div></div>
       </div>
       <div className="callout neutral">
-        <span className="small"><strong>What "overlap" means:</strong> take the area the computer marked and the area the experts marked. Divide the part they share by everything either of them marked.
+        <span className="small"><strong>What "overlap" means:</strong> take the area the model marked and the area the experts marked. Divide the part they share by everything either of them marked.
           100% is a perfect match. Experts mapping the same flood rarely agree perfectly either. <InfoTip text="This is the 'intersection over union' (IoU) score used in remote-sensing research." /></span>
       </div>
 
@@ -65,7 +65,7 @@ function ModelEval() {
         </div>
         <GroupedBars ariaLabel="Overlap score by method and condition" series={SERIES} height={260}
           groups={rows.map(([n, e]) => ({ label: METHOD_NAMES[n] ?? n, values: CONDITIONS.map(([c]) => e.splits?.[split]?.[c]?.iou ?? null) }))} />
-        {split === "bolivia" && <p className="caption muted" style={{ marginTop: 8 }}>Bolivia is a flood event that was kept completely out of training. On it, without camera photos, a simple radar rule does better than every learned model - an honest weakness described in the failure analysis.</p>}
+        {split === "bolivia" && <p className="caption muted" style={{ marginTop: 8 }}>Bolivia is a flood event that was kept completely out of training. On it, without optical images, a simple radar rule does better than every learned model: a real weakness, described in the failure analysis.</p>}
       </section>
 
       <div className="grid g-2" style={{ gap: 24 }}>
@@ -78,12 +78,12 @@ function ModelEval() {
         </section>
         <section className="card card-pad-lg">
           <h3>Does it know when it's unsure?</h3>
-          <p className="small muted" style={{ margin: "6px 0 14px" }}>If only the spots it is most sure about are kept, the remaining answers get much better. That's why unsure results are sent to a person.</p>
+          <p className="small muted" style={{ margin: "6px 0 14px" }}>If only the pixels it is most confident about are kept, the remaining answers get much better. That is why uncertain results are sent to a person.</p>
           {unc ? (
-            <table className="table"><thead><tr><th>Spots kept (most sure first)</th><th className="num">Correct</th><th className="num">Overlap</th></tr></thead>
+            <table className="table"><thead><tr><th>Pixels kept (most confident first)</th><th className="num">Correct</th><th className="num">Overlap</th></tr></thead>
               <tbody>{unc.risk_coverage.map((r: any) => <tr key={r.coverage}><td>{fmtPct(r.coverage)}</td><td className="num">{fmtPct(r.accuracy, 1)}</td><td className="num">{fmtPct(r.iou, 1)}</td></tr>)}</tbody></table>
           ) : <Empty title="No uncertainty test" />}
-          {unc && <p className="caption muted" style={{ marginTop: 10 }}>Its uncertainty points at its mistakes {fmtPct(unc.auroc_entropy_vs_error, 0)} of the time when comparing a wrong spot with a right one (AUROC {fmtNum(unc.auroc_entropy_vs_error, 3)}).</p>}
+          {unc && <p className="caption muted" style={{ marginTop: 10 }}>Its uncertainty points at its mistakes {fmtPct(unc.auroc_entropy_vs_error, 0)} of the time when comparing a wrong pixel with a right one (AUROC {fmtNum(unc.auroc_entropy_vs_error, 3)}).</p>}
         </section>
       </div>
 
@@ -104,11 +104,11 @@ function ModelEval() {
       <Disclosure summary="How the flood model was made (model card)">
         <dl className="kv-list">
           <dt>Training data</dt><dd>Sen1Floods11 v1.1, hand-labelled by experts (Bonafilia et al., 2020): 252 training / 89 validation / 90 test images from 10 flood events, plus 15 images from a flood in Bolivia that was never used for training.</dd>
-          <dt>What it looks at</dt><dd>Radar (Sentinel-1 VV, VH and their difference) and camera bands (Sentinel-2 blue, green, red, near- and short-wave infrared, plus two water indices), each with a "valid data" mask.</dd>
-          <dt>Design</dt><dd>Two encoders (radar and camera) joined by learned "gates" that decide, pixel by pixel, how much to trust each sensor; a shared U-Net decoder ({fmtNum(m.variants?.gated_fusion_unet?.parameters, 0)} parameters for v1).</dd>
+          <dt>What it looks at</dt><dd>Radar (Sentinel-1 VV, VH and their difference) and optical bands (Sentinel-2 blue, green, red, near- and short-wave infrared, plus two water indices), each with a "valid data" mask.</dd>
+          <dt>Design</dt><dd>Two encoders (radar and optical) joined by learned "gates" that decide, pixel by pixel, how much to rely on each sensor; a shared U-Net decoder ({fmtNum(m.variants?.gated_fusion_unet?.parameters, 0)} parameters for v1).</dd>
           <dt>Made robust by</dt><dd>Random crops and flips, simulated clouds, whole-sensor dropout and changes in image processing levels.</dd>
           <dt>Honest confidence</dt><dd>Temperature scaling fitted on the validation set (T = {fmtNum(fusion?.temperature, 2)}).</dd>
-          <dt>Uncertainty</dt><dd>Monte-Carlo dropout: each spot is predicted several times with small random changes; the spread measures how unsure it is.</dd>
+          <dt>Uncertainty</dt><dd>Monte-Carlo dropout: each pixel is predicted several times with a different random part of the last layer switched off; the spread of the answers measures how uncertain the model is.</dd>
           <dt>Chosen by</dt><dd>{sel.criterion ?? "-"}.</dd>
           <dt>Known limits</dt><dd>Trained on 11 flood events. Deserts, snow or dense cities may be unfamiliar (checked on every run by safety check G11). Radar under-detects water among buildings and under trees.</dd>
         </dl>

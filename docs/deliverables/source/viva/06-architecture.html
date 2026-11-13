@@ -1,0 +1,79 @@
+<section class="chapter flow">
+  <div class="keep"><h1><span class="num">Part 8</span>Architecture and implementation</h1>
+
+  <h2>Structure and technologies</h2>
+  <div class="qa">
+    <div class="q"><span class="n">76</span><span>Describe the architecture of AegisEO. <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Three parts. The <b>frontend</b> is a single-page web application (React and TypeScript) that runs in the browser and shows maps with MapLibre. The <b>backend</b> is a Python web server (FastAPI) that offers a JSON API, keeps the database, and runs checks in the background: a job manager hands each check to one of two worker threads, where the agent's orchestrator and specialists call tools that read external data sources, run the PyTorch model and compute results. <b>Storage</b> is a database (SQLite by default, PostgreSQL with PostGIS in the Docker set-up) for checks, results, findings, warnings and the audit log, plus a folder of files per check (map layers, reports, GeoTIFF) and a cache of downloaded image windows. (Doc Chapter 9)</p></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">77</span><span>Why did you choose these technologies? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>FastAPI validates every request against typed models (unknown fields and out-of-range values are rejected) and documents the API automatically. Python gives direct access to the geospatial and machine-learning libraries (rasterio and GDAL for images, NumPy and SciPy for arrays, PyTorch for the model). React with TypeScript catches type errors before the code runs. MapLibre is an open-source map library that needs no commercial key. SQLite needs no installation for a single computer; PostgreSQL with PostGIS supports spatial queries for a shared server.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">78</span><span>How does the browser know when a check has finished? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>By <dfn>polling</dfn>: while the check's status is "queued" or "running", the result page asks the server for the check every 2 seconds (TanStack Query's <code>refetchInterval</code>). As soon as the status is final, polling stops and the map layers, squares and places are loaded once. Polling is simpler and more robust than a permanent connection for a job that takes minutes. (Doc 13.9)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">79</span><span>Why does every check use one "common grid"? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>The inputs come in different projections and pixel sizes: radar and optical images in their own grids, the elevation model at 30 m, population at about 30 m, land cover at 10 m. To compare them pixel by pixel, everything is resampled onto one grid in the UTM zone of the area (a map projection in metres), at 20 m by default, each with a suitable method (averaging for radar and population, bilinear for height, majority for land cover). If the grid would exceed 2.6 million pixels, its pixel size grows in 10 m steps. (Doc 13.1)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">80</span><span>How does AegisEO cope when an external service is slow or fails? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>All requests go through one resilient HTTP client: each request has a timeout; temporary failures are retried with growing pauses (but client errors such as "not found" are not); after 4 consecutive failures a <dfn>circuit breaker</dfn> stops calling that service for 60 seconds, and a cached answer is used if one exists. Above that, the agent's rules decide: if OpenStreetMap or the population service fails, the check continues, marks the factor missing and lowers its confidence (rules P8, P9). Benchmark scenarios A04 and A05 simulate these outages.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">81</span><span>How can two checks run at the same time in Python? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Python's <dfn>global interpreter lock</dfn> lets only one thread execute Python code at a time. But most of a check's time is spent waiting for downloads or inside NumPy, PyTorch and GDAL, which release that lock while they work. So two worker threads really do overlap. For a larger installation the work would move to separate processes or machines with a shared job queue, listed as future work.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">82</span><span>What happens if the server restarts in the middle of a check? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>The database row of each check is the source of truth. At start-up, the job manager submits queued checks again and marks checks that were running as "interrupted", with the message "process restarted while running; use re-run to execute again". Nothing stays "running" forever, and the user can press Run again. This happened for real during testing on 1 November 2026 (two case studies were interrupted and re-run).</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">83</span><span>How is the system secured? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Optional sign-in with tokens and three roles (viewer, analyst, admin; deleting checks and running the benchmark need admin); a rate limit on requests that change data (240 per minute per client); strict validation of all input; security headers (a content security policy, no framing by other sites, no content-type guessing); secrets such as keys stored so they are never printed or returned, and redacted from logged URLs; and tests for path traversal (attempts to read files outside the allowed folders), authentication and roles. Sign-in is off by default for a local installation and must be turned on for shared use.</p></div>
+  </div>
+
+  <h2>Changes in this round</h2>
+  <div class="qa">
+    <div class="q"><span class="n">84</span><span>Why did you add the <code>/api/config</code> endpoint? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>The interface had its own copy of the 1,500 km² limit. If an administrator changed the server setting, the wizard would still have said 1,500, and either blocked areas the server accepts or allowed areas it rejects. Now the server publishes its limits (area, pixel budget, default pixel size, search period) and on/off switches (alert delivery, optional services, sign-in, offline mode), and every part of the interface reads them through one hook, <code>useLimits</code>. It returns only numbers and switches, never addresses or keys. A test checks that it matches the settings. (Doc 13.8)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">85</span><span>What technical problem did the expandable map reveal? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>The page entrance animations ended with a CSS <code>transform</code> left on the page container. In CSS, an element with a transform becomes the reference box for any descendant with <code>position: fixed</code>, so the "full-window" map would have filled only the page container instead of the window. The animations were changed to <code>animation-fill-mode: backwards</code>, which applies the start state before the animation and leaves nothing behind afterwards. The end-to-end tests now expand and restore the map, and a scripted check measured the expanded map at exactly the window size. (Doc 13.10)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">86</span><span>How did you restore the old website icon? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>The original logo (a white satellite symbol on a teal-to-indigo gradient) and the SVG favicon were found in the project's Git history and restored, not redrawn. Two PNG versions (32 and 180 pixels, for browsers and phones that do not use SVG icons) were rendered from that same original SVG. A browser check confirmed that the favicon is served as SVG and that the header logo uses the original gradient.</p></div>
+  </div>
+</section>
+
+<section class="chapter flow">
+  <div class="keep"><h1><span class="num">Part 9</span>Data sources and honesty</h1>
+  <div class="qa">
+    <div class="q"><span class="n">87</span><span>Which external services does AegisEO use, and which need a key? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Without any key: Microsoft Planetary Computer (Sentinel-1 and -2 images, elevation, water occurrence, land cover; a free temporary token is obtained automatically), HRSL population files on AWS, WorldPop, OpenStreetMap through Overpass, Nominatim place search, GDACS, USGS, NASA FIRMS (the public 7-day file), Open-Meteo, and the background map tiles. Optional: a NASA FIRMS key for older fire data, an Anthropic key for Claude wording, and a webhook address for delivering approved warnings. None is configured on the demonstration copy. (Doc 12.2)</p></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">88</span><span>How could an examiner check that the satellite images are real? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>"How we know" lists every image used with its identifier and a link to its record in the Planetary Computer catalogue, where it can be inspected independently. The "Compare before / after" slider shows the real images; the step-3 archive check lists real passes for any place and date; clicked facilities can be found on openstreetmap.org; and the Data sources page contacts every service on request. (Doc 12.4)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">89</span><span>What was wrong with the Data sources page, and what did you change? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Its "Working" labels were not always the result of contacting the service. NASA FIRMS was shown as working without any request, and four checks (GDACS, USGS, Open-Meteo, WorldPop) could be answered from a cached copy up to 12 hours or 30 days old. Now FIRMS is checked with a light request that also shows when its file was last updated, and status checks bypass the cache. Two tests protect this. The optional Claude entry still reports only whether a key is configured, and the page says so.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">90</span><span>What happens if a data source fails during a check? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>If images are missing, the safety checks decide: no "after" image stops the check honestly ("No usable images"); no "before" image lets it continue with the long-term water record and a stated limitation. If OpenStreetMap or population data fail, the check continues, the factor is shown as missing in the results and in each square's reasons, and confidence is lowered. AegisEO never fills a gap with invented values.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">91</span><span>What bug did you find in offline mode? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Offline mode (<code>AEGIS_OFFLINE=true</code>) is meant to serve saved data only. While testing it as a demonstration fallback, a re-run of the Sindh check offline reported 42,776 people potentially exposed instead of 7,248. The population function refused the high-resolution layer because of offline mode <i>before</i> looking in its cache, so the coarse fallback was used. The source label was correct, but the number was much less precise. The cache is now checked first; the same offline re-run then gave 7,248 in 8 seconds, and a test covers it. It shows why testing the fallback plan itself matters.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">92</span><span>Under which licences are the data used? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Sentinel data under the Copernicus open data licence; the Copernicus elevation model free with attribution; JRC surface water free with attribution; ESA WorldCover, HRSL, WorldPop and Open-Meteo under CC BY 4.0; OpenStreetMap under the Open Database Licence (ODbL); USGS feeds in the public domain; NASA FIRMS as NASA open data. The Data sources page lists each licence, and reports credit the sources. Only aggregated population estimates are used, never personal data.</p></div>
+  </div>
+</section>

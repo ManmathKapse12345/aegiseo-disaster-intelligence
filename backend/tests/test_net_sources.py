@@ -73,6 +73,71 @@ def test_offline_mode_uses_only_cache(tmp_path):
         c.get("https://example.org/x")
 
 
+def test_offline_mode_still_uses_cached_population(tmp_path):
+    """Offline mode serves cached data; it must not silently swap HRSL for the coarser WorldPop fallback."""
+    import numpy as np
+
+    from aegis.geo.grid import Grid
+
+    settings = Settings(data_dir=tmp_path, offline=True)
+    aoi = AOI.from_bbox(67.72, 26.62, 67.74, 26.64)
+    grid = Grid.for_aoi(aoi, 20.0, 2_600_000)
+    pop = PopulationSource(settings)
+    arr, info = pop.hrsl_on_grid(aoi, grid)
+    assert arr is None and info["status"] == "unavailable" and "offline" in info["reason"]
+
+    cached = np.full(grid.shape, 2.5, np.float32)
+    (settings.cache_dir / "population").mkdir(parents=True, exist_ok=True)
+    np.save(settings.cache_dir / "population" / f"hrsl_{grid.key()}.npy", cached)
+    arr, info = pop.hrsl_on_grid(aoi, grid)
+    assert info["status"] == "ok" and info["source"] == "HRSL (cached)"
+    assert arr is not None and np.array_equal(arr, cached)
+
+
+def test_firms_health_contacts_the_server(tmp_path):
+    from aegis.sources.feeds import HazardFeeds
+
+    seen = []
+
+    def up(req):
+        seen.append(req.method)
+        return httpx.Response(200, headers={"Last-Modified": "Sun, 08 Nov 2026 10:40:25 GMT"})
+
+    feeds = HazardFeeds(settings=online(tmp_path))
+    feeds.firms = client(tmp_path, up)
+    h = feeds.health("firms")
+    assert seen == ["HEAD"]  # a real request, but no 30 MB download
+    assert h["status"] == "operational" and "last updated Sun, 08 Nov 2026" in h["detail"]
+
+    feeds.firms = client(tmp_path, lambda req: httpx.Response(404))
+    assert feeds.health("firms")["status"] == "unavailable"  # no longer reported as working without checking
+
+
+def test_health_checks_never_answer_from_the_cache(tmp_path):
+    from aegis.sources.feeds import HazardFeeds
+
+    calls = {"n": 0}
+    bodies = {"usgs": {"features": [], "metadata": {}}, "gdacs": {"features": []},
+              "open_meteo": {"daily": {"time": [], "precipitation_sum": []}}}
+    feeds = HazardFeeds(settings=online(tmp_path))
+    for which, attr in (("usgs", "usgs"), ("gdacs", "gdacs"), ("open_meteo", "meteo")):
+        def h(req, body=bodies[which]):
+            calls["n"] += 1
+            return httpx.Response(200, json=body)
+        setattr(feeds, attr, client(tmp_path, h, cache_ttl_s=3600))
+        calls["n"] = 0
+        assert feeds.health(which)["status"] == "operational"
+        assert feeds.health(which)["status"] == "operational"
+        assert calls["n"] == 2, which  # both checks reached the service, even though responses are cacheable
+
+    pop = PopulationSource(settings=online(tmp_path))
+    pop.worldpop = client(tmp_path, lambda req: (calls.__setitem__("n", calls["n"] + 1), httpx.Response(200, json={"data": {"total_population": 5}}))[1],
+                          cache_ttl_s=3600)
+    calls["n"] = 0
+    pop.health(), pop.health()
+    assert calls["n"] == 2
+
+
 def test_url_redaction():
     u = redact_url("https://acct.blob.core.windows.net/c/f.tif?st=1&se=2&sig=SECRET&sp=r&keep=yes")
     assert "SECRET" not in u and "keep=yes" in u

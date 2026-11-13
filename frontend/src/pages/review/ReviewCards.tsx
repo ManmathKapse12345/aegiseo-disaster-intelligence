@@ -3,7 +3,7 @@ import { CheckCircle2, Eye, MapPinned, RefreshCcw, ShieldCheck, ThumbsDown, Thum
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "@/api/client";
-import { useAlertDecision, useReviewDecision } from "@/api/hooks";
+import { useAlertDecision, useConfig, useReviewDecision } from "@/api/hooks";
 import type { Alert, ReviewTask } from "@/api/types";
 import { Disclosure, PracticeChip, PriorityChip, useToast } from "@/components/ui";
 import { fmtDateTime, timeAgo } from "@/lib/format";
@@ -59,7 +59,11 @@ export function ReviewCard({ task, showAnalysis = true, onOpenMap, defaultOpen =
   return (
     <article className="review-card" aria-label={story.title}>
       <div className="row-wrap" style={{ gap: 8 }}>
-        <span className="chip warn">{task.kind === "verify_detection" ? "Check a square" : "Unsure finding"}</span>
+        <span className="chip warn" title={task.kind === "verify_detection"
+          ? "Created because a Critical or High square has low confidence"
+          : "Created because an automatic safety check needs a person's judgement"}>
+          {task.kind === "verify_detection" ? "Finding: high-priority square, weak evidence" : "Finding: raised by a safety check"}
+        </span>
         {task.hazard && <span className="chip outline">{HAZARDS[task.hazard].icon(14)} {HAZARDS[task.hazard].label}</span>}
         {task.mode === "synthetic" && <PracticeChip />}
         <span className="caption muted" style={{ marginLeft: "auto" }}>{timeAgo(task.created_at)}</span>
@@ -91,7 +95,7 @@ export function ReviewCard({ task, showAnalysis = true, onOpenMap, defaultOpen =
       </div>
       <div className="field" style={{ marginTop: 14 }}>
         <label className="label" htmlFor={`c-${task.id}`}>Your note <span className="muted" style={{ fontWeight: 400 }}>(optional, saved with your decision)</span></label>
-        <input id={`c-${task.id}`} className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="e.g. Compared the photos - the water is real" />
+        <input id={`c-${task.id}`} className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="e.g. Compared the 'before' and 'after' images: the water is real" />
       </div>
       <div className="decision-grid" role="group" aria-label="Your decision">
         {(Object.keys(effects) as ReviewDecisionKind[]).map((k) => {
@@ -109,15 +113,16 @@ export function ReviewCard({ task, showAnalysis = true, onOpenMap, defaultOpen =
   );
 }
 
+/** Alert statuses (backend/aegis/actions.py decide_alert): "approved" means approved but not delivered anywhere. */
 const ALERT_STATUS: Record<Alert["status"], { label: string; tone: string }> = {
-  pending_review: { label: "Waiting for approval", tone: "warn" }, approved: { label: "Approved (not sent)", tone: "ok" },
+  pending_review: { label: "Waiting for approval", tone: "warn" }, approved: { label: "Approved, kept in AegisEO", tone: "ok" },
   published: { label: "Approved and sent", tone: "ok" }, rejected: { label: "Rejected", tone: "" },
 };
 
 function deliveryText(d: Record<string, unknown> | null): string | null {
   if (!d) return null;
   if (d.delivered) return "Sent to your organisation's delivery channel.";
-  if (d.channel === "internal") return "Kept inside AegisEO - no delivery channel is set up.";
+  if (d.channel === "internal") return "Kept inside AegisEO: this server has no delivery channel set up, so nothing was sent.";
   if (d.channel === "none") return `Not sent: ${String(d.reason ?? "not allowed")}.`;
   if (d.error) return `Sending failed: ${String(d.error)}`;
   return null;
@@ -125,6 +130,7 @@ function deliveryText(d: Record<string, unknown> | null): string | null {
 
 export function AlertCard({ alert, showAnalysis = true, defaultOpen = false }: { alert: Alert; showAnalysis?: boolean; defaultOpen?: boolean }) {
   const decide = useAlertDecision();
+  const delivery = useConfig().data?.features.alert_delivery; // undefined while loading
   const toast = useToast();
   const qc = useQueryClient();
   const [note, setNote] = useState("");
@@ -178,11 +184,14 @@ export function AlertCard({ alert, showAnalysis = true, defaultOpen = false }: {
           <div className="decision-grid" role="group" aria-label="Your decision">
             <button className="decision ok" disabled={decide.isPending} onClick={() => act("approve")}>
               <strong><CheckCircle2 size={16} aria-hidden /> Approve</strong>
-              <span>{alert.synthetic ? "Marks it approved. Practice warnings are never sent anywhere." : "Marks it approved. It is sent to your organisation's delivery channel if one is set up; otherwise it stays in AegisEO."}</span>
+              <span>{alert.synthetic ? "Records your approval. Practice warnings are never sent anywhere."
+                : delivery === true ? "Records your approval, then sends the warning to your organisation's delivery channel (set up by the administrator)."
+                : delivery === false ? "Records your approval. This server has no delivery channel set up, so the warning stays inside AegisEO."
+                : "Records your approval. The warning is sent only if a delivery channel is set up on this server; otherwise it stays inside AegisEO."}</span>
             </button>
             <button className="decision danger" disabled={decide.isPending} onClick={() => act("reject")}>
               <strong><XCircle size={16} aria-hidden /> Reject</strong>
-              <span>It won't be sent. Later checks of the same area will show that someone corrected this.</span>
+              <span>The warning will not be sent. Your name and note are saved, and later checks of the same area show that someone rejected it.</span>
             </button>
           </div>
         </>

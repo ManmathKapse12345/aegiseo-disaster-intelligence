@@ -1,0 +1,50 @@
+<section class="chapter flow">
+  <div class="keep"><h1><span class="num">Part 3</span>Using the system, and its limits</h1>
+
+  <h2>A check from start to finish</h2>
+  <div class="qa">
+    <div class="q"><span class="n">21</span><span>Walk me through a check from the user's side. <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>A four-step wizard. <b>Where:</b> choose a past disaster (a case study), a current alert ("Happening now"), or any place found by name or coordinates, then adjust the frame on the map. <b>What:</b> flood, wildfire or landslide. <b>When:</b> the event date; AegisEO suggests a "before" search period (45 days to 1 day before) and an "after" period (the event day to 12 days later), and can list the real satellite passes without starting a check. <b>Start:</b> a summary, optional settings, and the Start button. A progress page then shows five plain steps, and the result page opens with a short answer, the map, the ranked squares, the places, the evidence and the items to review. (Doc 4.3-4.8)</p></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">22</span><span>How does AegisEO choose which images to use? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>With written rules, recorded in the check's record. Only passes covering at least half of the area are used. <b>P1:</b> the earliest radar pass after the event (closest in time, unaffected by cloud). <b>P4:</b> a "before" radar pass from the same orbit track and direction, so that differences come from the ground and not from the viewing angle; the search reaches up to 24 days further back if needed, otherwise the mismatch is flagged. <b>P2:</b> for optical images, cloud is measured over the exact area for the three best candidates, and the clearest is chosen with a small penalty per day of delay; an image with less than 5% usable pixels is discarded. <b>P3:</b> if a period has no usable image, its end is extended by 7 days, at most twice and never past today. (Doc 7.1)</p></div>
+    <div class="fu"><b>Follow-up:</b> Why insist on the same orbit for radar? <i>Radar brightness depends on the angle from which the ground is seen. Comparing passes from different tracks would show differences even where nothing changed. Safety check G07 warns when the orbits do not match; benchmark scenario A06 tests it.</i></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">23</span><span>What happens if no "after" image is found? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>The agent first extends the search (rule P3). If there is still no usable image, safety check G04 stops the check with the status "No usable images" (<code>insufficient_data</code>) and the result explains what to do: make the "after" period longer, or wait for the next pass. AegisEO never produces a map without an "after" observation.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">24</span><span>Why can a search period be at most 120 days, and why is there a warning when "before" and "after" are more than 60 days apart? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Safety check G03 rejects periods longer than 120 days or in the wrong order: a very long period no longer describes "just before" or "just after" an event. G06 only warns when the images are more than 60 days apart, because seasons change in that time (crops grow, rivers rise) and seasonal change can be mistaken for the disaster. The Sindh case study shows this note: its clearest optical "before" image was 65 days before the "after" image. (Doc 7.4)</p></div>
+  </div>
+
+  <h2>The area limit and the settings</h2>
+  <div class="qa">
+    <div class="q"><span class="n">25</span><span>Why can one check cover at most 1,500 km²? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>It is a processing budget of the server, not a limit of the satellites or the data provider. Every layer is held in memory on one grid of at most 2.6 million pixels, which at 20 m is about 1,040 km²; larger areas force larger pixels and larger priority squares, the downloads grow with the area, and very large OpenStreetMap requests are more likely to fail. The limit is a setting (<code>AEGIS_MAX_AOI_KM2</code>) that an administrator can raise, and since this round the interface reads it from the server. (Doc 7.5)</p></div>
+    <div class="fu"><b>Follow-up:</b> Did you test what happens near the limit? <i>Yes. On 8 November 2026 a 1,450 km² area around the Sindh flood took 225 s, against 189 s for the 216 km² case-study area, because the pixel size changed automatically to 30 m. The price of a large area is mainly less detail, not time.</i></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">26</span><span>Where is the limit enforced? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>At four points: the API rejects too-large areas when a check is created (HTTP 400 with a message suggesting to split the area); the image-availability preview refuses them; safety check G02 rejects them before any tool runs; and the wizard shows "Too big: zoom in" and disables Continue. The wizard and the API use the same value because the interface asks the server (<code>GET /api/config</code>).</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">27</span><span>Which settings can a user change, and when should they? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>In "Detection and ranking settings": the pixel size (10-60 m; finer for a small town, coarser for a quick look); the smallest patch to count (0.5 ha by default; raise it if the map is speckled); the minimum flood probability (0.5; raise it if dry land was marked, lower it if visible water was missed); the number of uncertainty samples (6); the minimum burn index for wildfires (0.10); and the ranking weights. Each setting shows its default and explanation. Most checks need none of them. (Doc Chapter 8)</p></div>
+    <div class="fu"><b>Follow-up:</b> What happens if someone sets all "change found" weights to zero? <i>Since this round, the wizard blocks Start with an explanation, and the API rejects the request with HTTP 422. Before, it was accepted and the check failed at the last step, after all downloads.</i></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">28</span><span>Why did you rename "Expert settings"? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>The old title, "Expert settings (optional - most people never need these)", told users the section was not for them, which was unhelpful and not true: the settings change results in documented ways. The new title, "Detection and ranking settings (optional)", says what the settings control, and every setting now explains its effect and shows its default.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">29</span><span>What does the expandable map do, and how does it work? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>The area picker and the result map have an "Expand map" button that makes the map fill the whole window, on any screen size, and "Back to normal size" (or Escape) to return. The map is not rebuilt, so zoom, layers and the selected square are kept: a CSS class fixes the existing map container to the window, the page behind stops scrolling, and the map library adapts to the new size. A scripted browser test measured the expanded map at exactly 1440 × 900 pixels on a desktop window and 412 × 839 on a phone-sized one. (Doc 13.10)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">30</span><span>What does the user see while a check runs, and how long does it take? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>A progress page with five plain steps ("Getting ready", "Finding satellite images", "Detecting what changed", "Checking who and what is there", "Writing up the results"), refreshed every 2 seconds. The user may leave; the check continues on the server. A first check of an area took 3 to 10 minutes in the measured runs, mostly downloading images; a repeat takes seconds because the image windows are saved. A practice run takes under a minute.</p></div>
+  </div>
+</section>

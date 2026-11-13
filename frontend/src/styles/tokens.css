@@ -32,6 +32,9 @@
   --accent-soft-2: #c9e6e0;
   --highlight: #f2b134;
 
+  /* brand mark (the original AegisEO logo badge; same gradient as public/favicon.svg) */
+  --brand-gradient: linear-gradient(120deg, #0e7490 0%, #0ea5e9 55%, #6366f1 120%);
+
   /* hazards */
   --flood: #1f6fd1;
   --flood-soft: #e5effb;

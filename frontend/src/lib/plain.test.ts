@@ -1,5 +1,6 @@
 import { ApiError } from "@/api/client";
 import type { AnalysisDetail, CellProps } from "@/api/types";
+import { effectiveResolution } from "./limits";
 import {
   areaPicture, areaVerdict, autoName, dateProblems, decisionEffects, defaultWindows, friendlyError, headline, oneLiner, reviewStory,
   runStageIndex, squareReasons, topCategory,
@@ -23,10 +24,21 @@ describe("sizes", () => {
   });
   it("explains whether an area can be checked", () => {
     expect(areaVerdict(2000, 1500)).toMatchObject({ ok: false, tone: "danger" });
+    expect(areaVerdict(2000, 1500).text).toMatch(/at most 1,500 km².*split the region/);
     expect(areaVerdict(0.1, 1500).text).toMatch(/Too small/);
     expect(areaVerdict(900, 1500)).toMatchObject({ ok: true, tone: "warn" });
     expect(areaVerdict(200, 1500)).toMatchObject({ ok: true, tone: "ok" });
     expect(areaVerdict(null, 1500).ok).toBe(false);
+    // above the full-detail size the server uses larger pixels (rule P0) - the verdict says so
+    expect(areaVerdict(1200, 1500, 0.25, 1040)).toMatchObject({ ok: true, tone: "warn" });
+    expect(areaVerdict(1200, 1500, 0.25, 1040).text).toMatch(/30 m instead of 20 m/);
+    // the limit is whatever the server says (AEGIS_MAX_AOI_KM2), not a constant in the UI
+    expect(areaVerdict(2000, 3000).ok).toBe(true);
+  });
+  it("estimates the pixel size the server will use, like backend Grid.for_aoi", () => {
+    expect(effectiveResolution(216, 20, 2_600_000)).toBe(20);
+    expect(effectiveResolution(1450, 20, 2_600_000)).toBe(30); // the 1,450 km² test run used 30 m
+    expect(effectiveResolution(300, 10, 2_600_000)).toBe(20);
   });
 });
 
@@ -95,10 +107,10 @@ describe("priority squares", () => {
   it("lists the real reasons behind a square's rank", () => {
     const r = squareReasons(cell, "flood", 1).map((x) => x.text);
     expect(r[0]).toBe("40% of this 1 km square looks flooded (0.4 km²).");
-    expect(r).toContain("About 120 people normally live in the hit part.");
-    expect(r).toContain("Inside the hit part: City Hospital (hospital).");
+    expect(r).toContain("About 120 people normally live in the flooded area of this square (an estimate, not people hurt).");
+    expect(r).toContain("Inside the flooded area of this square: City Hospital (hospital).");
     expect(r).toContain("1 important place within 500 m: School 4.");
-    expect(r).toContain("Raised to High because a hospital, clinic, emergency station or shelter is inside the hit part.");
+    expect(r).toContain("Raised to High by the life-safety rule: a hospital, clinic, fire or ambulance station, or shelter is inside the flooded area of this square.");
   });
 });
 
@@ -106,8 +118,8 @@ describe("review items", () => {
   it("explains a failed safety check in plain words and keeps the technical text", () => {
     const s = reviewStory({ kind: "quality_check", title: "G11 Input distribution shift", reason: "max channel z-score 4.00 vs training data (S2_post_B12)",
       payload: { code: "G11" } });
-    expect(s.title).toBe("This place looks unusual to the computer");
-    expect(s.why).toMatch(/learned from floods in 11 places/);
+    expect(s.title).toBe("This place looks unusual to the model");
+    expect(s.why).toMatch(/trained on floods in 11 places/);
     expect(s.technical).toMatch(/z-score 4.00/);
   });
   it("describes exactly what each decision does (mirrors the backend)", () => {

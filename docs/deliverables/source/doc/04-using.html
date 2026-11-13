@@ -1,0 +1,119 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 4</span>Using AegisEO, step by step</h1>
+  <p class="lead">This chapter follows a person through the website from the first page to a downloaded report, using real screenshots of the running application. What happens behind each step is explained briefly here and in depth in Chapters 9-13.</p>
+  <figure>
+    <div class="diagram" data-diagram="journey"></div>
+    <figcaption><b>Figure 4.1</b> The user's journey. Steps 2-5 form the "Check a place" wizard; steps 8 and 9 happen on the result page and the To review page.</figcaption>
+  </figure>
+
+  <h2>4.1 The five main pages</h2>
+  <p>The top bar (a bottom tab bar on phones) always shows five destinations, named after what a person wants to do:</p>
+  <table class="compact">
+    <thead><tr><th style="width:18%">Page</th><th>What it is for</th></tr></thead>
+    <tbody>
+      <tr><td><b>Home</b></td><td>Explains AegisEO in one paragraph and offers four starting points; shows waiting review items, recent results and live alerts.</td></tr>
+      <tr><td><b>Check a place</b></td><td>The four-step wizard that starts a new check.</td></tr>
+      <tr><td><b>Results</b></td><td>Every check ever run, newest first, with filters (needs a person, done, running, did not finish) and a search box.</td></tr>
+      <tr><td><b>To review</b></td><td>Everything waiting for a person: findings to double-check and draft warnings to approve or reject. The orange number on the tab counts them.</td></tr>
+      <tr><td><b>About</b></td><td>How AegisEO works, its limits, the words it uses, how accurate it is, and where its data comes from.</td></tr>
+    </tbody>
+  </table>
+  <p>The word <i>check</i> is the interface's name for one run of the analysis (in the code and the database it is called an <dfn>analysis</dfn>). A finished check is a <i>result</i>.</p>
+
+  <h2>4.2 The home page</h2>
+  <div class="pair">
+    <figure><img src="../../screenshots/02-home-choices.jpg" alt="Home page starting points" /><figcaption><b>Figure 4.2</b> Four starting points. The banner below them counts items waiting for a person (on this copy: 14 findings and 47 draft warnings from earlier checks).</figcaption></figure>
+    <figure><img src="../../screenshots/03-home-how.jpg" alt="How it works in four pictures" /><figcaption><b>Figure 4.3</b> "How it works, in four pictures": real panels from the Sindh 2022 result (before, after, detected water, priority squares).</figcaption></figure>
+  </div>
+  <p>The four starting points lead into the same wizard with different parts filled in: <b>Check a place</b> (choose anywhere on a map), <b>Explore a past disaster</b> (five ready-made real case studies), <b>Look at disasters happening now</b> (current GDACS alerts) and <b>Try a practice run</b> (a made-up scene with known answers).</p>
+
+  <h2>4.3 Step 1 - Where should AegisEO look?</h2>
+  <p>The first step offers three ways to choose the area, shown as three tabs. A guide panel on the right explains the step, recaps every choice so far with a <i>Change</i> link, and says what comes next.</p>
+  <h3>A past disaster</h3>
+  <div class="pair">
+    <figure><img src="../../screenshots/04-step1-past.jpg" alt="Past disaster case studies" /><figcaption><b>Figure 4.4</b> Five real case studies: Sindh floods 2022, Emilia-Romagna floods 2023, Derna flash flood 2023, Palisades Fire 2025 and Wayanad landslides 2024.</figcaption></figure>
+    <figure><img src="../../screenshots/05-step1-chosen.jpg" alt="Chosen case study" /><figcaption><b>Figure 4.5</b> After choosing Sindh, a green box explains why it is a good example; place, disaster type and dates are filled in.</figcaption></figure>
+  </div>
+  <p>Each case study (defined in <code>backend/aegis/scenarios.py</code>) only says <i>where</i> and <i>when</i> to look; every image is still fetched live from the archive when the check runs. Their date ranges were chosen by hand so that suitable images exist; for Sindh, the "before" range (1 June - 5 July 2022) lies before the monsoon.</p>
+  <h3>Happening now</h3>
+  <figure class="narrow"><img src="../../screenshots/06-step1-live.jpg" alt="Live alerts" /><figcaption><b>Figure 4.6</b> Current alerts from GDACS (and strong USGS earthquakes for context) on a world map and in a list. Earthquakes, droughts and volcanoes are shown but cannot be selected, because these images cannot map their damage.</figcaption></figure>
+  <p>An alert gives only one point, so choosing it draws a box of ±0.08° (about 18 km north to south) around that point. The area can then be moved with <i>Change area</i>.</p>
+  <h3>Anywhere</h3>
+  <div class="pair">
+    <figure><img src="../../screenshots/07-step1-place-search.jpg" alt="Place search" /><figcaption><b>Figure 4.7</b> Searching for a place by name (OpenStreetMap Nominatim). Typed coordinates such as "26.7, 67.8" also work.</figcaption></figure>
+    <figure><img src="../../screenshots/08-step1-frame.jpg" alt="Frame over the map" /><figcaption><b>Figure 4.8</b> The white frame shows the area that will be checked; the badge shows its size and whether it is allowed. "Use this area" confirms it; "Draw a box instead" lets the user drag a rectangle.</figcaption></figure>
+  </div>
+  <p>An area must be between 0.25 km² and 1,500 km². The size badge turns orange above about 750 km² and explains that very large areas are processed at less detail; a disclosure below the map, <i>"Why can one check cover at most 1,500 km²?"</i>, gives the reasons (Chapter 7). The limit shown is read from the server, so if an administrator changes it, the interface follows.</p>
+  <div class="pair">
+    <figure><img src="../../screenshots/09-step1-size-limit.jpg" alt="Size limit explanation" /><figcaption><b>Figure 4.9</b> The size-limit explanation added in this round of improvements.</figcaption></figure>
+    <figure><img src="../../screenshots/10-step1-map-expanded.jpg" alt="Expanded map" /><figcaption><b>Figure 4.10</b> <i>Expand map</i> makes the map fill the whole window; <i>Back to normal size</i> or the Esc key returns it. Choosing an area returns it automatically.</figcaption></figure>
+  </div>
+
+  <h2>4.4 Step 2 - What happened there?</h2>
+  <figure class="narrow"><img src="../../screenshots/11-step2-what.jpg" alt="Choose the disaster type" /><figcaption><b>Figure 4.11</b> Three disaster types, each with what AegisEO looks for and how. For a case study or alert the right type is pre-selected; choosing a different one shows a warning.</figcaption></figure>
+  <p>Earthquakes and storms are not listed: building damage and wind damage are smaller than these images can show. A storm's flooding can still be mapped by choosing <i>Flood</i>.</p>
+
+  <h2>4.5 Step 3 - When did it happen?</h2>
+  <figure class="narrow"><img src="../../screenshots/12-step3-when.jpg" alt="Choose the date" /><figcaption><b>Figure 4.12</b> The event date and the two search ranges, drawn on a timeline. For a case study the ranges come from the case study; otherwise they are suggested from the date (45 days before, and the event day plus up to 12 days after).</figcaption></figure>
+  <p>The <dfn>'before' search</dfn> and the <dfn>'after' search</dfn> are date ranges in which AegisEO looks for images taken before and after the event. They can be changed under <i>Change the search dates</i>, which also explains what to do if no 'after' image is found (Figure 4.13). The optional <i>Check which satellite images exist</i> searches the real archive without downloading anything and lists the dates of every usable pass (Figure 4.14).</p>
+  <div class="pair">
+    <figure><img src="../../screenshots/13-step3-revisit.jpg" alt="Revisit explanation" /><figcaption><b>Figure 4.13</b> The rewritten explanation of satellite passes and search length (Chapter 7 explains every sentence).</figcaption></figure>
+    <figure><img src="../../screenshots/14-step3-archive.jpg" alt="Archive search result" /><figcaption><b>Figure 4.14</b> A live archive search for the Sindh ranges: 6 radar and 12 optical images before, 3 radar and 7 optical after, with dates.</figcaption></figure>
+  </div>
+  <p>Impossible dates are explained and block the Continue button: a future date, a 'before' search ending after the event, or a search longer than 120 days. A 'before' and 'after' gap of more than 60 days only produces a warning.</p>
+
+  <h2>4.6 Step 4 - Ready to start</h2>
+  <div class="pair">
+    <figure><img src="../../screenshots/15-step4-start.jpg" alt="Summary before starting" /><figcaption><b>Figure 4.15</b> A one-sentence summary, the name of the check, and the five stages that will follow.</figcaption></figure>
+    <figure><img src="../../screenshots/16-step4-settings.jpg" alt="Detection and ranking settings" /><figcaption><b>Figure 4.16</b> The optional "Detection and ranking settings", each with an explanation and its default (Chapter 8).</figcaption></figure>
+  </div>
+  <p>Pressing <b>Start the check</b> sends the request to the server, which immediately replies with an identifier for the new check; the browser opens its result page and shows progress.</p>
+
+  <h2>4.7 While the check runs</h2>
+  <figure class="narrow"><img src="../../screenshots/18-run-progress.jpg" alt="Progress of a running check" /><figcaption><b>Figure 4.17</b> Progress in five plain stages. The page asks the server for the status every two seconds. The check keeps running on the server if the page is closed.</figcaption></figure>
+  <p>A real check usually takes 2 to 10 minutes the first time an area is checked (on this computer, first runs of 77-407 km² took 5 to 10 minutes, mostly spent downloading), and seconds when the same area is checked again because downloaded images are kept in a cache. A practice run takes a few seconds. <b>Stop</b> cancels a running check after its current step.</p>
+
+  <h2>4.8 The result page</h2>
+  <figure><img src="../../screenshots/23-result-answer.jpg" alt="Result page top" /><figcaption><b>Figure 4.18</b> The Sindh 2022 result. The status chip "Needs a person to check" means at least one finding waits for review. "The short answer" states the main finding in one sentence; four key numbers sit on the right; "How sure" explains the confidence level.</figcaption></figure>
+  <p>The top of the page answers the main questions before any detail: how much area changed and what share of the checked area that is, how many people normally live there (an estimate, not people hurt), how many important places are inside or within 500 m, and how many squares rank highest. A yellow box says how many items wait for a person, and <i>Safety-check notes</i> lists what the automatic checks reported (Figure 4.19).</p>
+  <div class="pair">
+    <figure><img src="../../screenshots/24-result-notes.jpg" alt="Safety check notes" /><figcaption><b>Figure 4.19</b> Safety-check notes: G06 (images more than 60 days apart, a note) and G11 (the scene looks unusual to the model, needs a person).</figcaption></figure>
+    <figure><img src="../../screenshots/36-result-downloads.jpg" alt="Downloads menu" /><figcaption><b>Figure 4.20</b> Downloads: a PDF report, the priority list as a spreadsheet (CSV), map data (GeoJSON) and pixel data (GeoTIFF).</figcaption></figure>
+  </div>
+  <h3>The map</h3>
+  <figure><img src="../../screenshots/25-result-workspace.jpg" alt="Map and priority list" /><figcaption><b>Figure 4.21</b> The map beside the details panel. Coloured squares show priorities (red Critical, orange High, yellow Moderate, teal Low); blue outlines show the detected flooding; dots mark important places (red inside the flooded area, orange within 500 m).</figcaption></figure>
+  <p>The map is drawn in the browser by <dfn>MapLibre GL</dfn>, a free mapping library. Its controls are: <b>What's shown</b> (turn layers on and off: priority squares, important places, villages and towns, the result layers, the satellite images, and expert layers such as model uncertainty and radar change), <b>Expand map</b> (fill the window), <b>Compare before / after</b> (a slider that reveals the 'before' image on one side and the 'after' image on the other, Figure 3.2), the background map choice (Map or Satellite), and a button to zoom back to the whole checked area. Clicking a square selects it in the list; clicking a place or a flooded patch shows its details.</p>
+  <figure><img src="../../screenshots/29-result-map-expanded.jpg" alt="Expanded result map" /><figcaption><b>Figure 4.22</b> The result map expanded to the full window, with the map key. All layers, the compare slider and square selection keep working.</figcaption></figure>
+  <h3>The four tabs of the details panel</h3>
+  <div class="pair">
+    <figure><img src="../../screenshots/26-result-square-open.jpg" alt="Where to help first" /><figcaption><b>Figure 4.23</b> <b>Where to help first</b>: every square ranked, with reasons in sentences. Opening a square shows why it scored as it did (the contribution of each factor), suggested next steps, how stable the ranking is, and a button to change its priority.</figcaption></figure>
+    <figure><img src="../../screenshots/30-result-people.jpg" alt="People and places" /><figcaption><b>Figure 4.24</b> <b>People &amp; places</b>: the population estimate and its source, important places inside or near the changed area, villages and towns, roads crossing it and the types of land affected.</figcaption></figure>
+  </div>
+  <div class="pair">
+    <figure><img src="../../screenshots/31-result-how.jpg" alt="How we know" /><figcaption><b>Figure 4.25</b> <b>How we know</b>: which satellite images were used and their dates, how strong the evidence is (cross-check agreement, average probability, model uncertainty, cloud, reliance on radar), the safety checks, rain around the event and the written summary.</figcaption></figure>
+    <figure><img src="../../screenshots/33-result-trace-tools.jpg" alt="Full step-by-step record" /><figcaption><b>Figure 4.26</b> The full step-by-step record for specialists: every step, decision, tool call (with timing) and safety check, plus the evidence and facts behind the numbers.</figcaption></figure>
+  </div>
+  <figure class="narrow"><img src="../../screenshots/35-result-review-tab.jpg" alt="To review tab of a result" /><figcaption><b>Figure 4.27</b> <b>To review</b>: this check's findings to double-check and its draft warnings, with the decision buttons (Chapter 6).</figcaption></figure>
+
+  <h2>4.9 Results, To review and About</h2>
+  <div class="pair">
+    <figure><img src="../../screenshots/42-results-list.jpg" alt="Results list" /><figcaption><b>Figure 4.28</b> The Results page lists every check with its status, one-line summary and top priority.</figcaption></figure>
+    <figure><img src="../../screenshots/48-accuracy.jpg" alt="Accuracy page" /><figcaption><b>Figure 4.29</b> "How accurate is it?" shows the flood model's test results and the agent safety benchmark, read from the server's own result files.</figcaption></figure>
+  </div>
+  <p>The About section also contains "Where the data comes from" (every source, its licence, limits and live status) and a plain explanation of the words used on the site. The search box titled "Have a question?" that used to appear on the About page was removed in this round of changes (Chapter 14).</p>
+
+  <h2>4.10 Practice runs</h2>
+  <div class="pair">
+    <figure><img src="../../screenshots/19-practice-result.jpg" alt="Practice result" /><figcaption><b>Figure 4.30</b> A practice run's result. The violet "Practice data" chip and banner appear on every view; the scene is placed at 0° N 0° E in the open ocean.</figcaption></figure>
+    <figure><img src="../../screenshots/22-approved-toast.jpg" alt="Approved practice warning" /><figcaption><b>Figure 4.31</b> Approving a practice warning: the message confirms that synthetic-data warnings can never be published (safety check G18).</figcaption></figure>
+  </div>
+  <p>Practice runs are generated by <code>backend/aegis/synthetic.py</code>: a made-up valley with a river, towns, crops and forest; simulated radar and optical images with realistic noise and clouds; and a known flood, burn or landslide footprint. They exist so that the system can be tested and demonstrated without the internet, and so that its accuracy can be measured against a known right answer. Their results are never presented as real.</p>
+
+  <h2>4.11 On a phone</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4mm;break-inside:avoid">
+    <figure style="margin:0"><img src="../../screenshots/51-phone-home.jpg" alt="Phone home" /></figure>
+    <figure style="margin:0"><img src="../../screenshots/52-phone-result.jpg" alt="Phone result" /></figure>
+    <figure style="margin:0"><img src="../../screenshots/53-phone-map-expanded.jpg" alt="Phone expanded map" /></figure>
+  </div>
+  <p class="small" style="margin-top:2mm"><b>Figure 4.32</b> The same pages on a phone-sized screen (412 px wide): the navigation moves to a bottom tab bar, the result stacks vertically, and the expanded map covers the whole screen including the tab bar.</p>
+</section>

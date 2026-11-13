@@ -1,4 +1,5 @@
 import type { LiveEvent, Scenario } from "@/api/types";
+import { DEFAULT_LIMITS } from "@/lib/limits";
 import { displayName, emptyDraft, reducer, stepStatus } from "./draft";
 
 const sindh: Scenario = {
@@ -31,7 +32,7 @@ describe("check wizard state", () => {
     expect(reducer(named, { type: "area", bbox: [67.71, 26.6, 67.9, 26.8], place: undefined, keepSource: true }).place).toBe("Dadu, Sindh, Pakistan");
   });
 
-  it("draws an 18 km box around a live alert and pre-selects the hazard", () => {
+  it("draws a 0.16-degree box around a live alert and pre-selects the hazard", () => {
     const e = { id: "gdacs/TC/1", source: "GDACS", hazard: "tropical_cyclone", name: "Cyclone X", alert_level: "Red", country: "Mozambique",
       from: "2024-03-10T00:00:00", lon: 35, lat: -18 } as LiveEvent;
     const d = reducer(emptyDraft(), { type: "liveEvent", e });
@@ -49,6 +50,18 @@ describe("check wizard state", () => {
     expect(stepStatus(huge, 0).why).toMatch(/Too big/);
     const named = reducer(d, { type: "name", name: "ab" });
     expect(stepStatus(named, 3).why).toMatch(/at least 3 letters/);
+  });
+
+  it("uses the server's limits, and blocks rankings that the API would reject", () => {
+    const big = reducer(emptyDraft(), { type: "area", bbox: [0, 0, 0.45, 0.45] }); // about 2,500 km²
+    expect(stepStatus(big, 0).ok).toBe(false); // default limit 1,500 km²
+    expect(stepStatus(big, 0, { ...DEFAULT_LIMITS, maxKm2: 3000 }).ok).toBe(true); // a server configured for more
+    const d = reducer(reducer(emptyDraft(), { type: "scenario", s: sindh }), { type: "expert", patch: {} });
+    expect(stepStatus(d, 3).ok).toBe(true);
+    const noHazard = reducer(d, { type: "expert", patch: { weights: { ...d.expert.weights, extent: 0, intensity: 0 } } });
+    expect(stepStatus(noHazard, 3)).toMatchObject({ ok: false, why: expect.stringMatching(/change found/) });
+    const noExposure = reducer(d, { type: "expert", patch: { weights: { ...d.expert.weights, population: 0, critical_facilities: 0, access: 0 } } });
+    expect(stepStatus(noExposure, 3).why).toMatch(/people and places/);
   });
 
   it("treats practice scenes as fixed and resets the dates when the event date changes", () => {

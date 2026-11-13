@@ -1,0 +1,86 @@
+<section class="no-toc">
+  <h1 style="font-size:20pt">Contents</h1>
+  <div class="toc" id="toc"></div>
+</section>
+
+<section class="no-toc" style="break-before: page">
+  <h1 style="font-size:20pt">How to read this report</h1>
+  <p class="lead">This report documents the AegisEO project completely: the problem, the system, its methods, its data, its implementation, its evaluation and its limitations. It is written so that a reader with no background in satellites or web development can follow it.</p>
+  <p>The chapters are ordered so that every idea is explained before anything that depends on it:</p>
+  <ul>
+    <li><b>Chapters 1-3</b> explain the problem, who AegisEO is for, and the basic science of satellite images that everything else builds on.</li>
+    <li><b>Chapters 4-8</b> show the system from the user's side: every page, every feature, the review and approval process, the satellite schedule and the area limit, and the optional settings.</li>
+    <li><b>Chapters 9-13</b> open the system up: architecture, folders and files, technologies, data sources and the most important pieces of code.</li>
+    <li><b>Chapters 14-16</b> cover testing and limitations, a step-by-step demonstration procedure, and possible future work (kept separate from what exists today).</li>
+  </ul>
+  <p>Technical terms are explained in the sentence where they first appear and are shown in <dfn>this colour</dfn> at that point. After that, they are used normally. There is no separate glossary: if a term is unfamiliar, the first place it appears explains it.</p>
+  <p>Coloured boxes mark three kinds of information:</p>
+  <div class="box key"><span class="bt">Key idea</span>The single most important point of a section.</div>
+  <div class="box app"><span class="bt">In AegisEO</span>Where a general idea appears in the actual code or interface, with the file name.</div>
+  <div class="box limit"><span class="bt">Limitation</span>Something the system cannot do, or does only approximately. These are stated plainly because an honest description of limits is part of a correct description of the system.</div>
+  <p>A note on evidence: statements about behaviour were checked against the source code; numbers come from the project's own files (the trained-model evaluation, the database of completed checks) or from tests run while preparing this report in November 2026. Where something could not be verified, the text says so.</p>
+</section>
+
+<section class="chapter">
+  <h1><span class="num">Chapter 1</span>Introduction: the problem and the purpose of AegisEO</h1>
+  <p class="lead">AegisEO is a web application that compares satellite images taken before and after a flood, wildfire or landslide, maps what changed, estimates who and what is in the changed area, ranks small squares of the area by how urgently they should be checked, and then hands every consequential decision to a person.</p>
+
+  <h2>1.1 The problem after a disaster</h2>
+  <p>In the first days after a large flood, wildfire or landslide, the organisations that respond (government disaster agencies, the fire service, humanitarian organisations) all need answers to the same three questions: <b>where</b> did the land actually change, <b>who and what</b> is in those places, and <b>where should we look first</b>? Answering these questions from the ground is slow. Roads may be blocked, phone networks may be down, and the affected region can be larger than a city. People on the ground see only a small part of it.</p>
+  <p><dfn>Earth observation (EO)</dfn> means collecting information about the Earth's surface from a distance, usually with instruments on satellites. Some satellites photograph or scan all of the world's land every few days, and the images of the European Union's Copernicus programme (explained in Chapter 3) are free for anyone to use. A <dfn>satellite image</dfn> is a grid of measurements of the ground, taken from orbit; Chapter 3 explains exactly what such an image contains.</p>
+  <p>Free images alone do not solve the problem. Turning them into a reliable map of a flood usually needs a specialist who knows where to find suitable images, how to deal with clouds, how to separate new flooding from rivers that are always there, and how to judge whether the result can be trusted. That takes hours or days, and it is easy to make mistakes that look convincing on a map.</p>
+  <p>Three technical difficulties make the work hard:</p>
+  <ul>
+    <li><b>Clouds.</b> Ordinary <dfn>optical</dfn> satellite images are made from sunlight reflected by the ground, like a photograph. Floods usually happen in bad weather, and clouds hide the ground from optical sensors.</li>
+    <li><b>Radar images are hard to read.</b> <dfn>Radar</dfn> satellites send their own microwave signal to the ground and measure the echo, so they work through clouds and at night. But radar images are noisy and contain effects (such as flooded buildings appearing bright instead of dark) that mislead untrained readers.</li>
+    <li><b>A map is not a decision.</b> Knowing where water is does not tell a team where to go. That requires combining the map with information about where people live and where hospitals, schools and roads are, and it requires knowing how much the map can be trusted.</li>
+  </ul>
+
+  <h2>1.2 Problem statement</h2>
+  <div class="box key"><span class="bt">Problem statement</span>Given a place, a disaster type and a date, automatically find suitable free satellite images from before and after the event, map the change they show with a known level of confidence even when clouds hide part of the scene, estimate the people and important facilities in the changed area, rank the area's sub-regions for checking with stated reasons, and present the result in a form that a non-specialist can understand, while making sure that uncertain or consequential conclusions are reviewed by a person before anyone acts on them.</div>
+
+  <h2>1.3 What AegisEO does about it</h2>
+  <p>AegisEO automates the routine part of this work and makes its reasoning visible. A person chooses a place (a past disaster, a current alert, or any area on a map), the kind of disaster and the date. AegisEO then:</p>
+  <ol>
+    <li>searches the free archive of the European Sentinel-1 (radar) and Sentinel-2 (optical) satellites, chooses the most suitable images from before and after the event, and downloads only the part covering the chosen area;</li>
+    <li>detects the change: new water for floods (using a neural network trained on expert-mapped flood images), burned land for wildfires, and possible landslide scars for landslides;</li>
+    <li>estimates <dfn>exposure</dfn>, meaning the people, facilities and roads located inside or near the changed area. Exposure is not harm: people living in a flooded area may be unhurt, so AegisEO always says "potentially exposed", never "affected";</li>
+    <li>divides the area into <dfn>priority squares</dfn> (usually 1 km across) and gives each a score from 0 to 100 with the reasons written out;</li>
+    <li>runs 18 automatic <dfn>safety checks</dfn> on the request, the images, the result and the written text, and sends anything doubtful to a person;</li>
+    <li>drafts short warning messages, which are never sent unless a named person approves them;</li>
+    <li>produces a map, a downloadable PDF report and data files.</li>
+  </ol>
+  <p>The software is organised as an <dfn>agent</dfn>: a program that is given a goal, makes a plan, carries the plan out by calling a fixed set of tools (for example "search the image archive" or "count people in the area"), checks the results of each step, and changes course when something goes wrong, while recording every decision. In AegisEO the agent's choices are made by written rules, not by an AI language model, so the same inputs always produce the same decisions and every decision can be traced. Chapter 9 explains this design.</p>
+  <p>Finally, AegisEO is built around <dfn>human-in-the-loop (HITL)</dfn> operation: the software prepares, and a person decides. Doubtful findings wait for a person to double-check them, and draft warnings wait for a person to approve or reject them. Chapter 6 explains this process in detail.</p>
+  <figure>
+    <img src="../../screenshots/01-home-hero.jpg" alt="AegisEO home page" />
+    <figcaption><b>Figure 1.1</b> The AegisEO home page. The animated image on the right compares a real optical satellite image of Dadu district, Pakistan, before (27 June 2022) and after (31 August 2022) the 2022 monsoon floods.</figcaption>
+  </figure>
+
+  <h2>1.4 Objectives</h2>
+  <p>The objectives below describe what the delivered system actually does. Chapter 14 reports how each was tested.</p>
+  <table>
+    <thead><tr><th style="width:8%">#</th><th style="width:30%">Objective</th><th>How it is met in the delivered system</th></tr></thead>
+    <tbody>
+      <tr><td>O1</td><td>Detect change from two kinds of satellite image</td><td>Floods: a neural network that combines radar and optical images, developed with the 446 expert-labelled images of Sen1Floods11 (252 for training, 89 for choosing the model, 105 kept aside for the final test). Wildfires: the standard dNBR burn index. Landslides: a combination of vegetation loss, radar change and slope.</td></tr>
+      <tr><td>O2</td><td>Work when clouds hide the ground</td><td>The flood model learned to rely on radar where optical pixels are cloudy; measured accuracy with no optical image at all is 65% overlap with expert maps, against 42% for an optical-only model under 50% cloud.</td></tr>
+      <tr><td>O3</td><td>State how confident each result is</td><td>Calibrated probabilities, a per-pixel uncertainty map, an independent cross-check and an overall confidence level (High, Medium, Low).</td></tr>
+      <tr><td>O4</td><td>Estimate exposure</td><td>Population grids (Meta/CIESIN HRSL, WorldPop), hospitals, schools, emergency services, settlements and roads (OpenStreetMap), and land cover (ESA WorldCover).</td></tr>
+      <tr><td>O5</td><td>Rank where to look first, with reasons</td><td>A documented score for every priority square, written reasons, a life-safety rule and a sensitivity test of the weights.</td></tr>
+      <tr><td>O6</td><td>Keep a person in charge</td><td>18 safety checks, a review queue, approval of every warning by a named person, priority changes with reasons, an audit log, and memory of corrections for later checks.</td></tr>
+      <tr><td>O7</td><td>Be usable by non-specialists</td><td>A four-step guided wizard, plain-language results, technical detail behind expandable sections.</td></tr>
+      <tr><td>O8</td><td>Be honest and reliable</td><td>Every run ends with a truthful status; missing data is reported rather than invented; failures of external services are handled; practice data is always labelled as made up.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>1.5 Scope</h2>
+  <div class="pair">
+    <div class="box real" style="margin:0"><span class="bt">In scope</span>
+      <ul style="margin:0"><li>Floods (the main, fully trained and evaluated method), wildfire burn scars and landslide candidates.</li><li>Areas of 0.25 to 1,500 km² per check.</li><li>Past events (Sentinel archive from 2014/2015) and recent events.</li><li>Only free, public data.</li></ul></div>
+    <div class="box limit" style="margin:0"><span class="bt">Out of scope</span>
+      <ul style="margin:0"><li>Flood depth, building damage, casualty numbers.</li><li>Earthquakes and storm wind damage (too small to see in 10-20 m pixels).</li><li>Sending warnings without a person's approval.</li><li>Real-time imagery within hours of an event (it depends on when satellites pass).</li></ul></div>
+  </div>
+
+  <h2>1.6 Origin of the project</h2>
+  <p>AegisEO was built as a B.Tech project inspired by the multi-sensor Earth-observation problems that companies such as GalaxEye Space work on. It uses only public data and assumes no private data. The repository contains the complete source code, the trained model files, automated tests and technical documents (in the <code>docs</code> folder), on which this guide builds.</p>
+</section>

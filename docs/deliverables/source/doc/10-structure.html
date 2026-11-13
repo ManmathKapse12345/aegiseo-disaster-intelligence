@@ -1,0 +1,101 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 10</span>Project structure: folders and files</h1>
+  <p class="lead">The repository (the project's folder under version control with <dfn>Git</dfn>, a system that records every change to the files) contains about 200 tracked files. This chapter is a map of where things are.</p>
+
+  <h2>10.1 Top level</h2>
+  <table class="compact">
+    <thead><tr><th style="width:26%">Folder / file</th><th>Contents</th></tr></thead>
+    <tbody>
+      <tr><td><code>backend/</code></td><td>The Python server: the <code>aegis</code> package, tests, scripts, dependency lists, Dockerfile.</td></tr>
+      <tr><td><code>frontend/</code></td><td>The web interface: <code>src</code> (TypeScript/React), <code>public</code> (icons and images), <code>e2e</code> (browser tests), build configuration, nginx configuration, Dockerfile.</td></tr>
+      <tr><td><code>models/</code></td><td>The trained neural networks (five <code>*.pt</code> files of 1.8-4.8 MB), their training records (<code>*.json</code>), <code>evaluation.json</code>, <code>selection.json</code> (which model is deployed) and the training log.</td></tr>
+      <tr><td><code>docs/</code></td><td>Technical documents (architecture, agent design, data, model card, evaluation, benchmark, acceptance runs, failure analysis, API, UI design, final report), figures, and <code>deliverables/</code> (this report, the slides, screenshots and their sources).</td></tr>
+      <tr><td><code>deploy/</code></td><td>Hugging Face, Oracle Cloud and Cloudflare-tunnel deployment files.</td></tr>
+      <tr><td><code>docker-compose.yml</code></td><td>The three-container deployment (PostGIS, API, web).</td></tr>
+      <tr><td><code>.env.example</code></td><td>Every setting (environment variable) with comments; copy to <code>.env</code> to use.</td></tr>
+      <tr><td><code>data/</code> (not in Git)</td><td>Created at run time: the SQLite database, artefacts, image cache, downloaded training data, logs.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>10.2 The backend package <code>backend/aegis</code></h2>
+  <table class="compact">
+    <thead><tr><th style="width:24%">Module</th><th>Responsibility</th></tr></thead>
+    <tbody>
+      <tr><td><code>main.py</code></td><td>Creates the FastAPI application: middleware, error handlers, routers, serving the built interface.</td></tr>
+      <tr><td><code>config.py</code></td><td>All settings with defaults (read from <code>AEGIS_*</code> environment variables): storage, security, limits, sources, optional keys.</td></tr>
+      <tr><td><code>api/</code></td><td><code>routes_analyses.py</code>, <code>routes_review.py</code>, <code>routes_system.py</code> (endpoints); <code>schemas.py</code> (request validation); <code>deps.py</code> (identity, roles, rate limiter).</td></tr>
+      <tr><td><code>jobs.py</code></td><td>Job manager (thread pool), restart recovery, default search ranges, building the agent's configuration.</td></tr>
+      <tr><td><code>agents/</code></td><td>Orchestrator, specialists, state, tools and toolbox, guardrails, memory, narrative, recorder (Section 9.5).</td></tr>
+      <tr><td><code>analysis/</code></td><td><code>hazards.py</code> (flood, wildfire, landslide detection), <code>impact.py</code> (exposure), <code>prioritize.py</code> (squares and scores), <code>indices.py</code>, <code>sar.py</code> (Lee filter, log-ratio), <code>terrain.py</code> (slope, height above drainage), <code>bundle.py</code> (the set of loaded layers).</td></tr>
+      <tr><td><code>ml/</code></td><td><code>models.py</code> (U-Net and gated fusion), <code>features.py</code> (model inputs), <code>inference.py</code> (calibrated prediction with MC dropout, radar-specialist hybrid), <code>train.py</code>, <code>evaluate.py</code>, <code>metrics.py</code>, <code>baselines.py</code> (Otsu, MNDWI), <code>augment.py</code>, <code>data.py</code>, <code>prepare.py</code>.</td></tr>
+      <tr><td><code>sources/</code></td><td><code>stac.py</code> (catalogue search, signing, grouping), <code>imagery.py</code> (reading Sentinel-1/2 onto the grid), <code>osm.py</code>, <code>population.py</code>, <code>feeds.py</code> (GDACS, USGS, FIRMS, Open-Meteo), <code>places.py</code> (Nominatim), <code>registry.py</code> (source list and health).</td></tr>
+      <tr><td><code>geo/</code></td><td><code>aoi.py</code> (area validation and size limit), <code>grid.py</code> (common grid, pixel budget), <code>raster.py</code> (warping and caching), <code>vector.py</code> (polygons).</td></tr>
+      <tr><td><code>net/http.py</code></td><td>The resilient HTTP client.</td></tr>
+      <tr><td><code>reports/</code></td><td><code>layers.py</code> (map overlays, GeoTIFF), <code>documents.py</code> (PDF, CSV, GeoJSON).</td></tr>
+      <tr><td><code>actions.py</code></td><td>Human decisions: approving/rejecting warnings, review decisions, priority changes, re-runs, deletion.</td></tr>
+      <tr><td><code>db.py</code></td><td>Database models (13 tables), PostGIS columns, sessions, audit helper.</td></tr>
+      <tr><td><code>scenarios.py</code>, <code>synthetic.py</code></td><td>Case studies; the practice-scene generator.</td></tr>
+      <tr><td><code>benchmark.py</code></td><td>The agent benchmark (12 scenarios and 8 safety probes).</td></tr>
+      <tr><td><code>knowledge/</code></td><td>Six method documents used for cited guidance.</td></tr>
+      <tr><td><code>observability.py</code>, <code>logging_config.py</code></td><td>Prometheus metrics and JSON logging.</td></tr>
+    </tbody>
+  </table>
+  <p>Other backend folders: <code>tests/</code> (10 test files, 93 tests) and <code>scripts/</code> (downloading Sen1Floods11, training all models, writing the acceptance report, rendering the explainer images and practice previews).</p>
+
+  <h2>10.3 The frontend <code>frontend/src</code></h2>
+  <table class="compact">
+    <thead><tr><th style="width:26%">File / folder</th><th>Responsibility</th></tr></thead>
+    <tbody>
+      <tr><td><code>main.tsx</code>, <code>App.tsx</code></td><td>Start-up, data-fetching setup, page routes, error boundary.</td></tr>
+      <tr><td><code>api/</code></td><td><code>client.ts</code> (HTTP calls, errors, tokens), <code>hooks.ts</code> (one hook per API resource), <code>types.ts</code> (TypeScript types mirroring the API).</td></tr>
+      <tr><td><code>components/</code></td><td><code>Shell.tsx</code> (top bar with the restored logo, navigation, footer), <code>ui.tsx</code> (chips, callouts, disclosures, tabs, dialogs, messages), <code>charts.tsx</code> (hand-written SVG charts), <code>illustrations.tsx</code>, <code>ExplainerStrip.tsx</code>.</td></tr>
+      <tr><td><code>components/map/</code></td><td><code>AnalysisMap.tsx</code> (result map), <code>AoiPicker.tsx</code> (area picker), <code>EventsMap.tsx</code> (live alerts), <code>basemap.ts</code>, <code>expand.tsx</code> (new: full-window map).</td></tr>
+      <tr><td><code>lib/</code></td><td><code>meta.tsx</code> (vocabulary), <code>plain.ts</code> (sentences from numbers), <code>limits.ts</code> (new: server limits), <code>format.ts</code>, <code>geo.ts</code>, <code>hooks.ts</code>, <code>events.ts</code>.</td></tr>
+      <tr><td><code>pages/</code></td><td><code>Home.tsx</code>; <code>check/</code> (wizard: <code>CheckWizard</code>, <code>StepWhere</code>, <code>StepWhatWhen</code>, <code>StepStart</code>, <code>draft.ts</code>); <code>results/</code> (<code>ResultsList</code>, <code>ResultPage</code>, <code>ResultPanels</code>); <code>review/</code> (<code>ReviewPage</code>, <code>ReviewCards</code>); <code>about/</code> (<code>About</code>, <code>Accuracy</code>, <code>DataSources</code>).</td></tr>
+      <tr><td><code>styles/</code></td><td><code>tokens.css</code> (colours, fonts, sizes), <code>global.css</code> (all component styles).</td></tr>
+      <tr><td><code>data/explainer-images.json</code></td><td>Dates and credits of the four explainer images (now tracked in Git, see Section 14.4).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="chapter">
+  <h1><span class="num">Chapter 11</span>Technologies actually used</h1>
+  <p class="lead">Every technology below was confirmed in the dependency files or the code. Versions are those installed on the development computer on 8 November 2026.</p>
+  <h2>11.1 Backend</h2>
+  <table class="compact">
+    <thead><tr><th style="width:22%">Technology</th><th>Role in AegisEO</th></tr></thead>
+    <tbody>
+      <tr><td>Python 3.12</td><td>Language of the server, the analysis and the machine learning.</td></tr>
+      <tr><td>FastAPI, Uvicorn</td><td>Web framework and server for the REST API.</td></tr>
+      <tr><td>Pydantic 2, pydantic-settings</td><td>Validation of requests and of settings.</td></tr>
+      <tr><td>SQLAlchemy 2, psycopg</td><td>Database access (ORM) for SQLite and PostgreSQL.</td></tr>
+      <tr><td>PyTorch</td><td>Defining, training and running the flood neural networks.</td></tr>
+      <tr><td>NumPy, SciPy</td><td>Array computing; image filters, labelling of connected patches, distance maps.</td></tr>
+      <tr><td>rasterio (GDAL)</td><td>Reading COGs over HTTP, reprojecting onto the grid, writing GeoTIFFs.</td></tr>
+      <tr><td>shapely, pyproj</td><td>Geometry (area polygons, intersections) and coordinate conversion (WGS84 ↔ UTM), geodesic areas.</td></tr>
+      <tr><td>httpx</td><td>HTTP client under the resilient client.</td></tr>
+      <tr><td>scikit-learn</td><td>TF-IDF search over the knowledge base; evaluation metrics.</td></tr>
+      <tr><td>ReportLab, matplotlib, Pillow</td><td>PDF reports; figures and map images; image files.</td></tr>
+      <tr><td>prometheus-client</td><td>The <code>/metrics</code> endpoint.</td></tr>
+      <tr><td>anthropic (optional)</td><td>Client for the optional Claude summary wording; unused without a key.</td></tr>
+      <tr><td>pytest, ruff</td><td>Automated tests; code-style and error checking.</td></tr>
+    </tbody>
+  </table>
+  <h2>11.2 Frontend</h2>
+  <table class="compact">
+    <thead><tr><th style="width:22%">Technology</th><th>Role in AegisEO</th></tr></thead>
+    <tbody>
+      <tr><td>TypeScript 5.9, React 19</td><td>Language and component library of the interface.</td></tr>
+      <tr><td>React Router 7</td><td>Page addresses and navigation.</td></tr>
+      <tr><td>TanStack Query 5</td><td>Fetching, caching and polling API data.</td></tr>
+      <tr><td>MapLibre GL 5.24</td><td>Interactive maps (WebGL).</td></tr>
+      <tr><td>lucide-react</td><td>Icons (including the satellite in the restored logo).</td></tr>
+      <tr><td>Inter, Newsreader (fontsource)</td><td>Fonts, bundled with the application (no external font requests).</td></tr>
+      <tr><td>Vite 6</td><td>Development server and production build.</td></tr>
+      <tr><td>Vitest, Testing Library, jsdom</td><td>Unit and component tests.</td></tr>
+      <tr><td>Playwright 1.64</td><td>End-to-end tests in a real browser (also used to capture this report's screenshots).</td></tr>
+    </tbody>
+  </table>
+  <h2>11.3 Infrastructure and services</h2>
+  <p>Docker and Docker Compose, nginx, PostgreSQL 16 with PostGIS 3.4 (Docker deployment); Microsoft Planetary Computer, AWS Open Data (HRSL), WorldPop, OpenStreetMap Overpass and Nominatim, GDACS, USGS, NASA FIRMS and Open-Meteo as data services (Chapter 12); OpenFreeMap and EOX for background maps; Git for version control.</p>
+</section>

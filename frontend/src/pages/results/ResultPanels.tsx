@@ -44,9 +44,9 @@ export function PrioritiesPanel({ a, cells, loading, selected, onSelect }: {
   return (
     <div className="stack">
       <p className="small ink-2">
-        The area was split into {pri?.cell_km ? `${pri.cell_km} km` : ""} squares. Each one got a score from 0 to 100: higher means more damage
-        where more people and important places are.{" "}
-        <InfoTip text={`Score = 100 × damage^${pri?.weights.hazard_exponent ?? 0.5} × (people and places)^${(1 - (pri?.weights.hazard_exponent ?? 0.5)).toFixed(2)}. How sure we are is shown separately and never lowers a square's priority - unsure but serious places should be checked, not hidden.`} />
+        The area was divided into {pri?.cell_km ? `${pri.cell_km} km` : ""} squares. Each square got a score from 0 to 100. The score is higher when more of
+        the square shows change and when more people and important places are there. Critical is 70 or more, High 50 or more, Moderate 30 or more.{" "}
+        <InfoTip text={`Score = 100 × (change found)^${pri?.weights.hazard_exponent ?? 0.5} × (people and places)^${(1 - (pri?.weights.hazard_exponent ?? 0.5)).toFixed(2)}. How sure we are is shown separately and never lowers a square's priority: uncertain but serious places should be checked, not hidden.`} />
       </p>
       <div className="row-wrap" role="group" aria-label="Show only" style={{ gap: 6 }}>
         {(["all", ...CATEGORIES] as const).map((c) => {
@@ -94,7 +94,7 @@ function SquareCard({ c, a, open, onToggle, onOverride }: { c: CellProps; a: Ana
           <div>
             <h5 style={{ marginBottom: 8 }}>Why it scored {fmtNum(c.score, 0)}</h5>
             <ContributionBars labels={FACTOR_LABEL} colors={FACTOR_COLOR} groups={[
-              { name: "Damage", subscore: c.hazard_subscore, parts: Object.entries(c.contributions.hazard).map(([k, v]) => ({ key: k, value: v, raw: c.factors[k] })) },
+              { name: "Change found", subscore: c.hazard_subscore, parts: Object.entries(c.contributions.hazard).map(([k, v]) => ({ key: k, value: v, raw: c.factors[k] })) },
               { name: "People and places", subscore: c.exposure_subscore, parts: Object.entries(c.contributions.exposure).map(([k, v]) => ({ key: k, value: v, raw: c.factors[k] })) },
             ]} />
           </div>
@@ -231,17 +231,17 @@ export function EvidencePanel({ a, trace, traceLoading }: { a: AnalysisDetail; t
   return (
     <div>
       <div className="panel-section" style={{ marginTop: 0 }}>
-        <h3>Photos used</h3>
+        <h3>Satellite images used</h3>
         <ul className="reason-list">
           {obs.map((o) => (
             <li key={o.sensor + o.role}>
               {o.role === "pre" ? <CheckCircle2 size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden style={{ color: "var(--accent)" }} />}
-              <span><strong>{o.sensor === "S1" ? "Radar" : "Camera"} photo, {o.role === "pre" ? "before" : "after"}</strong> · {fmtDate(o.acquired_at)}
+              <span><strong>{o.sensor === "S1" ? "Radar image (Sentinel-1)" : "Optical image (Sentinel-2)"}, {o.role === "pre" ? "before" : "after"}</strong> · {fmtDate(o.acquired_at)}
                 {o.cloud_fraction != null && <span className="muted"> · {fmtPct(o.cloud_fraction)} cloud over your area</span>}
                 {o.synthetic && <span className="muted"> · made-up</span>}</span>
             </li>
           ))}
-          {obs.length === 0 && <li><Info size={16} aria-hidden /><span>No photo details were recorded.</span></li>}
+          {obs.length === 0 && <li><Info size={16} aria-hidden /><span>No image details were recorded.</span></li>}
         </ul>
       </div>
 
@@ -250,14 +250,14 @@ export function EvidencePanel({ a, trace, traceLoading }: { a: AnalysisDetail; t
         <div className="stack" style={{ gap: 16 }}>
           <Quality label="A second method agrees" value={q.cross_method_agreement as number | null} good
             tip="Share of the found area that a separate, simpler method (radar change or a water index) also flags. Higher is better." />
-          <Quality label="Average likelihood in the found area" value={q.mean_probability_detected as number | null} good
-            tip="How likely, on average, the computer thinks each marked spot really is affected." />
-          <Quality label="How unsure the computer was" value={q.mean_uncertainty_detected as number | null} max={0.3}
-            tip="Lower is better. Above 0.15 AegisEO asks a person to check." fmt={(v) => fmtNum(v, 2)} />
-          {q.s2_post_cloud_fraction != null && <Quality label="Clouds in the 'after' camera photo" value={q.s2_post_cloud_fraction as number}
-            tip="Share of your area hidden by cloud or cloud shadow. Radar is not affected by clouds." />}
-          {q.mean_sar_reliance_detected != null && <Quality label="Decided mostly by radar" value={q.mean_sar_reliance_detected as number} neutral
-            tip="How much the computer relied on radar (rather than the camera) inside the found area." />}
+          <Quality label="Average probability in the detected area" value={q.mean_probability_detected as number | null} good
+            tip="The model's average estimated probability that a marked pixel really changed." />
+          <Quality label="Model uncertainty" value={q.mean_uncertainty_detected as number | null} max={0.3}
+            tip="How much the model's repeated predictions disagree (Monte-Carlo dropout). Lower is better. Above 0.15 AegisEO asks a person to check." fmt={(v) => fmtNum(v, 2)} />
+          {q.s2_post_cloud_fraction != null && <Quality label="Cloud in the 'after' optical image" value={q.s2_post_cloud_fraction as number}
+            tip="Share of your area hidden by cloud or cloud shadow. Radar images are not affected by clouds." />}
+          {q.mean_sar_reliance_detected != null && <Quality label="Reliance on radar" value={q.mean_sar_reliance_detected as number} neutral
+            tip="How much the model relied on the radar image (rather than the optical image) inside the detected area." />}
         </div>
       </div>
 
@@ -266,13 +266,16 @@ export function EvidencePanel({ a, trace, traceLoading }: { a: AnalysisDetail; t
         {traceLoading && <Loading />}
         {trace && (
           <>
-            <p className="small ink-2" style={{ marginBottom: 12 }}><CheckCircle2 size={16} aria-hidden style={{ color: "var(--ok)", verticalAlign: -3 }} /> {passed} check{passed === 1 ? "" : "s"} passed{checks.length ? `, ${checks.length} raised a note:` : "."}</p>
+            <p className="small ink-2" style={{ marginBottom: 8 }}><CheckCircle2 size={16} aria-hidden style={{ color: "var(--ok)", verticalAlign: -3 }} /> {passed} check{passed === 1 ? "" : "s"} passed{checks.length ? `, ${checks.length} reported something:` : "."}</p>
+            {checks.length > 0 && <p className="caption muted" style={{ marginBottom: 12 }}>
+              <strong>Note</strong>: recorded for you to read; no action needed. <strong>Needs a person</strong>: a finding to double-check was created under To review.
+              <strong> Stopped</strong>: something unsafe was blocked (for example, warning text whose numbers did not match the measurements was withheld).</p>}
             <div className="stack">
               {checks.map((g, i) => {
                 const c = CHECKS[g.code];
                 return (
                   <Callout key={i} tone={g.outcome === "warn" ? "neutral" : "warn"} icon={<AlertTriangle size={18} aria-hidden />}
-                    title={<>{c?.title ?? g.name} <span className="chip outline" style={{ marginLeft: 6, minHeight: 22 }}>{g.outcome === "escalate" ? "a person should check" : g.outcome === "block" ? "stopped" : "note"}</span></>}>
+                    title={<>{c?.title ?? g.name} <span className="chip outline" style={{ marginLeft: 6, minHeight: 22 }}>{g.outcome === "escalate" ? "needs a person" : g.outcome === "block" ? "stopped" : "note"}</span></>}>
                     <span>{c?.why ?? g.message}</span>
                     <span className="caption muted" style={{ display: "block", marginTop: 4 }}><code>{g.code}: {g.message}</code></span>
                   </Callout>

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>AegisEO - IEEE conference paper</title>
+<style>
+@page { size: Letter; margin: 0.75in 0.625in 1in 0.625in; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+body { font-family: "Times New Roman", Times, serif; font-size: 9.6pt; line-height: 1.17; text-align: justify; hyphens: auto; }
+h1.title { font-size: 22pt; font-weight: normal; text-align: center; margin: 0 0 10pt; line-height: 1.12; }
+.authors { display: flex; justify-content: center; gap: 18pt; flex-wrap: wrap; margin-bottom: 12pt; }
+.author { text-align: center; font-size: 9.5pt; line-height: 1.25; min-width: 1.6in; }
+.author .n { font-size: 10.5pt; }
+.author i { font-style: italic; }
+.cols { column-count: 2; column-gap: 0.25in; column-fill: auto; }
+p { margin: 0 0 0; text-indent: 1em; }
+p.ni, .abstract p, .kw p { text-indent: 0; }
+.abstract, .kw { font-weight: bold; font-size: 8.8pt; line-height: 1.16; margin-bottom: 6pt; }
+.abstract i, .kw i { font-weight: bold; }
+h2 { font-size: 9.6pt; font-weight: normal; font-variant: small-caps; text-align: center; margin: 8pt 0 3pt; letter-spacing: 0.02em; break-after: avoid; }
+h3 { font-size: 9.6pt; font-weight: normal; font-style: italic; margin: 5pt 0 2pt; break-after: avoid; }
+figure { margin: 6pt 0; break-inside: avoid; text-align: center; }
+figure img { width: 100%; display: block; }
+figcaption { font-size: 8pt; text-align: justify; margin-top: 3pt; line-height: 1.15; }
+.wide { column-span: all; margin: 4pt 0 8pt; }
+.wide img { width: 92%; margin: 0 auto; }
+table { border-collapse: collapse; width: 100%; font-size: 7.8pt; line-height: 1.15; margin: 2pt 0 6pt; break-inside: avoid; }
+caption { font-size: 8pt; font-variant: small-caps; text-align: center; margin-bottom: 3pt; }
+th, td { padding: 1.2pt 2pt; text-align: center; }
+td:first-child, th:first-child { text-align: left; }
+thead tr { border-top: 1pt solid #000; border-bottom: 0.5pt solid #000; }
+tbody tr:last-child { border-bottom: 1pt solid #000; }
+tr.best td { font-weight: bold; }
+.eq { text-align: center; margin: 3pt 0; font-style: italic; }
+.algo { border-top: 1pt solid #000; border-bottom: 1pt solid #000; font-size: 8pt; line-height: 1.22; margin: 6pt 0; padding: 2pt 0 3pt; break-inside: avoid; text-align: left; }
+.algo .h { border-bottom: 0.5pt solid #000; padding-bottom: 2pt; margin-bottom: 2pt; }
+.algo ol { margin: 0; padding-left: 16pt; }
+.algo li { margin: 0; }
+.algo .k { font-weight: bold; }
+.algo .ind { padding-left: 10pt; }
+ol.refs { font-size: 7.8pt; line-height: 1.17; padding-left: 18pt; margin: 0; text-align: left; list-style: none; counter-reset: r; }
+ol.refs li { margin-bottom: 1.5pt; counter-increment: r; position: relative; }
+ol.refs li::before { content: "[" counter(r) "]"; position: absolute; left: -18pt; }
+ul.tight { margin: 1pt 0 2pt; padding-left: 12pt; }
+ul.tight li { margin: 0 0 1pt; }
+</style></head>
+<body>
+<h1 class="title">AegisEO: An Agentic Radar&ndash;Optical Satellite Image Processing Pipeline for Disaster Change Detection and Response Prioritisation</h1>
+<div class="authors"><div class="author"><div class="n">Manmath Kapse</div><i>Dept. of Computer Science and Design</i><br>Energy Institute Bengaluru<br>Bengaluru, India<br>Roll No. 23CD3024</div><div class="author"><div class="n">Pravesh Kumar Patel</div><i>Dept. of Computer Science and Design</i><br>Energy Institute Bengaluru<br>Bengaluru, India<br>Roll No. 23CD3029</div></div>
+
+<div class="cols">
+<div class="abstract"><p><i>Abstract</i>&mdash;After a flood, wildfire or landslide, responders must learn quickly where the land surface changed, who may be exposed, and which places to inspect first, often while clouds hide the ground from optical satellites. We present AegisEO, a full-stack system that answers these questions from free Sentinel-1 radar and Sentinel-2 optical imagery. An agent searches the public archives, checks image quality, maps change with a calibrated gated-fusion U-Net that is aware of which sensor actually observed each pixel, intersects the result with population, facility and road layers, ranks 0.5&ndash;1&nbsp;km grid cells with explanations, and drafts alerts whose every number is checked against recorded evidence. Uncertain or consequential findings are routed to a human reviewer; nothing is published without a named approver. On the Sen1Floods11 test split the deployed model reaches a water IoU of 0.844 with both sensors, 0.739 under 50&nbsp;% simulated cloud and 0.653 with no optical data, against 0.431 for classical SAR thresholding and 0.419 for an optical-only network under cloud. Temperature scaling lowers the expected calibration error from 0.014 to 0.005. In a 12-scenario closed-loop benchmark and 8 safety probes the agent passed every case and escalated exactly the three cases that needed a person.</p></div>
+<div class="kw"><p><i>Index Terms</i>&mdash;synthetic aperture radar, multispectral imaging, image fusion, change detection, semantic segmentation, U-Net, flood mapping, uncertainty calibration, AI agents, human-in-the-loop.</p></div>
+
+<h2>I. Introduction and Problem Statement</h2>
+<p>Satellite images are one of the few sources that cover a whole disaster area within days of the event. Two free image streams from the European Copernicus programme are relevant: Sentinel-2, a multispectral optical sensor (10&ndash;20&nbsp;m) whose images are easy to interpret but blind under cloud, and Sentinel-1, a C-band synthetic aperture radar (SAR) that images through cloud and at night but suffers from speckle noise and ambiguous returns (smooth roads look like water; flooded buildings appear brighter, not darker). Floods, the most frequent disaster type, almost always coincide with heavy cloud.</p>
+<p>Producing a water map is not enough. A person deciding where to send help needs to know <i>where</i> the surface changed relative to before the event, <i>what</i> lies there (people, hospitals, roads), <i>which</i> places to look at first, and <i>how far</i> the result can be trusted. Today this chain involves several specialists and tools and takes hours to days.</p>
+<p><b>Problem statement.</b> Given an area of interest (0.25&ndash;1500&nbsp;km&sup2;), a hazard type and an event date, automatically find suitable pre- and post-event radar and optical images, detect the change robustly when one sensor is missing or clouded, estimate exposure, rank response areas with explanations, and report results honestly, so that a non-specialist can act on them under human control.</p>
+<p><b>Contributions.</b> (1) A sensor-validity-gated fusion network with a radar fallback and calibrated per-pixel uncertainty; (2) an explicit agent loop with 20 typed tools and 18 guardrails that ends in honest terminal states; (3) an INFORM-style hazard&nbsp;&times;&nbsp;exposure priority grid with sensitivity analysis; (4) evidence-grounded alert drafting with mandatory human approval; and (5) a measured evaluation on a public benchmark, a behavioural agent benchmark and five real historical events.</p>
+
+<h2>II. State of the Art</h2>
+<p><b>Classical image processing.</b> Operational SAR flood mapping thresholds the backscatter histogram, typically with Otsu&rsquo;s method [3] applied per scene or per tile [4], after speckle suppression such as the Lee filter [7]; change is found from the log-ratio of pre- and post-event images. Optical methods use spectral indices: the modified normalised difference water index MNDWI [5] for water and the differenced normalised burn ratio dNBR [9] for burn severity. These are fast and transparent but sensitive to the scene, and optical indices fail under cloud.</p>
+<p><b>Deep learning.</b> U-Net [2] is the standard encoder&ndash;decoder for segmentation of remote-sensing images. Sen1Floods11 [1] provides 446 hand-labelled co-registered Sentinel-1/2 chips from 11 flood events and showed that learned models outperform thresholding. Konapala <i>et al.</i> [6] studied combining Sentinel-1 and Sentinel-2 for inundation mapping and found that fusion helps, but most published fusion models assume that both sensors are always present and clear.</p>
+<p><b>Trust and decision support.</b> Modern networks are over-confident; temperature scaling [10] and Monte-Carlo dropout [11] give calibrated probabilities and uncertainty estimates. Risk indices such as INFORM [12] combine hazard and exposure multiplicatively. Language-model agents that interleave reasoning and tool use [13] are increasingly used for automation, but their outputs can contain unsupported numbers.</p>
+<p><b>Gap.</b> We did not find an open system that joins these parts: robust fusion under missing sensors, calibrated uncertainty, exposure-based ranking, and an auditable agent that refuses to over-claim and keeps a human in charge. AegisEO addresses this gap.</p>
+
+<h2>III. Data Sources</h2>
+<p>All inputs are free and public (Table&nbsp;I). Per analysis, only windows covering the area are read from cloud-optimised GeoTIFFs through the Microsoft Planetary Computer STAC catalogue, reprojected to a common UTM grid (20&nbsp;m by default) and cached. Sentinel-2 values are converted to reflectance with the processing-baseline offset and masked with the scene classification layer; Sentinel-1 RTC <i>&gamma;</i><sup>0</sup> is harmonised to <i>&sigma;</i><sup>0</sup> (the training domain), and pre/post radar pairs are matched by relative orbit.</p>
+<table><caption>Table I. Data sources</caption>
+<thead><tr><th>Purpose</th><th>Dataset</th></tr></thead>
+<tbody>
+<tr><td>Radar</td><td style="text-align:left">Sentinel-1 GRD RTC, VV + VH</td></tr>
+<tr><td>Optical</td><td style="text-align:left">Sentinel-2 L2A reflectance + SCL mask</td></tr>
+<tr><td>Terrain / water / land</td><td style="text-align:left">Copernicus DEM GLO-30, JRC surface water [8], ESA WorldCover</td></tr>
+<tr><td>Population</td><td style="text-align:left">HRSL [14]; WorldPop totals as cross-check</td></tr>
+<tr><td>Facilities, roads</td><td style="text-align:left">OpenStreetMap (Overpass API)</td></tr>
+<tr><td>Event context</td><td style="text-align:left">GDACS, USGS, NASA FIRMS, Open-Meteo ERA5</td></tr>
+<tr><td>Training / test</td><td style="text-align:left">Sen1Floods11 v1.1 hand-labelled [1]</td></tr>
+</tbody></table>
+<p>Sen1Floods11 is split into 252 training chips, a validation split, a 90-chip test split and 15 chips of the unseen Bolivia event.</p>
+
+<h2>IV. Methodology</h2>
+<figure class="wide"><img src="../build/diagrams/pipeline.png" alt="Ten-step agent pipeline">
+<figcaption>Fig. 1. Flowchart of one analysis. The agent validates the request, recalls earlier analyses of the same area, acquires and checks images, detects change, checks the result, estimates exposure, ranks grid cells, drafts reports and delivers map layers. Guardrails G01&ndash;G18 can block, warn or escalate at the marked steps; the final status is never a silent success.</figcaption></figure>
+<h3>A. Agent loop</h3>
+<p>An orchestrator coordinates five specialist agents (acquisition, perception, impact, prioritisation, reporting) through a typed tool executor that enforces an allow-list, a call budget and declared side effects (read-only, compute, write-draft, external). Every tool call, decision and guardrail outcome is stored as a trace. Planning rules P0&ndash;P9 cover window extension when no image is found, orbit matching, choosing the clearest optical image, a radar-led re-run under heavy cloud, and graceful degradation when a source fails. Algorithm&nbsp;1 summarises the loop.</p>
+<div class="algo"><div class="h"><b>Algorithm 1</b> AegisEO analysis (simplified)</div>
+<ol>
+<li><span class="k">Input:</span> area <i>A</i>, hazard <i>h</i>, event date <i>t</i></li>
+<li><span class="k">if not</span> Validate(<i>A</i>, <i>h</i>, <i>t</i>) <span class="k">then return</span> rejected</li>
+<li><i>M</i> &larr; Recall(earlier analyses and corrections of <i>A</i>)</li>
+<li><i>S</i> &larr; SearchArchive(S1, S2, <i>A</i>, <i>t</i>); widen window if empty</li>
+<li>(<i>pre</i>, <i>post</i>) &larr; SelectPairs(<i>S</i>) by orbit and cloud cover</li>
+<li><span class="k">if</span> no usable post-event image <span class="k">then return</span> insufficient_data</li>
+<li><i>P</i>, <i>U</i> &larr; FusionModel(<i>post</i>, validity masks); same for <i>pre</i></li>
+<li><i>C</i> &larr; <i>P</i><sub>post</sub>&middot;(1&minus;<i>P</i><sub>pre</sub>), remove permanent water and steep terrain</li>
+<li><i>R</i> &larr; LogRatio(Lee(SAR)), &Delta;MNDWI; agreement <i>a</i>(<i>C</i>, <i>R</i>)</li>
+<li><i>flags</i> &larr; ResultChecks(<i>U</i>, extent, <i>a</i>, scene type)</li>
+<li><span class="k">for each</span> cell <i>g</i> in grid(<i>A</i>) <span class="k">do</span></li>
+<li class="ind"><i>H<sub>g</sub></i>, <i>E<sub>g</sub></i> &larr; hazard and exposure of <i>g</i>; score<sub><i>g</i></sub> by (2)</li>
+<li>Stability &larr; 200 Monte-Carlo weight perturbations</li>
+<li><i>D</i> &larr; DraftAlerts(); <span class="k">reject</span> any text with an unsupported number</li>
+<li><span class="k">if</span> <i>flags</i> require a person <span class="k">then</span> status &larr; needs_review</li>
+<li><span class="k">return</span> layers, ranked cells, drafts, trace, status</li>
+</ol></div>
+
+<h3>B. Water segmentation and sensor fusion</h3>
+<p>All learned models share a U-Net backbone (channel widths 16&ndash;128) trained identically for 40 epochs with binary cross-entropy plus Dice loss, no-data masking, radiometric domain randomisation, simulated clouds and sensor dropout; the checkpoint is chosen on validation IoU. We compare classical baselines (per-scene Otsu on VV and VH, MNDWI&nbsp;&gt;&nbsp;0, a rule-based fusion), single-sensor U-Nets, early fusion of all 13 channels, and our <i>gated fusion</i> network. Gated fusion uses separate radar and optical encoders; at every scale a learned gate mixes the two feature maps, multiplied by per-pixel validity masks so that the network cannot use optical features under cloud or outside the swath. Version 2 adds stronger sensor dropout. In the deployed hybrid, pixels observed only by radar take the output of the calibrated radar specialist, blended smoothly across cloud edges. The configuration is selected automatically on the validation split, so test and Bolivia results stay unbiased. Temperature scaling (<i>T</i>&nbsp;=&nbsp;1.66) calibrates probabilities and last-layer MC dropout gives per-pixel uncertainty.</p>
+
+<h3>C. Change detection</h3>
+<p>For floods, the probability of new water is computed by post-classification comparison:</p>
+<p class="eq"><i>P</i><sub>new</sub> = <i>P</i><sub>water,post</sub> &middot; (1 &minus; <i>P</i><sub>water,pre</sub>) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(1)</p>
+<p class="ni">with JRC permanent water (occurrence &ge;&nbsp;80&nbsp;%) removed. Independent corroboration comes from the Lee-filtered SAR log-ratio and the MNDWI change; their agreement with the model is reported and checked. Terrain plausibility removes steep slopes and pixels far above drainage. Wildfire uses dNBR with FIREMON severity classes [9] confirmed by VH backscatter drop and FIRMS hotspots; landslide candidates combine NDVI loss, slope and SAR change and are always sent to review.</p>
+
+<h3>D. Exposure and prioritisation</h3>
+<p>Detections are intersected with dasymetric population, facilities (inside or within 500&nbsp;m), roads and land cover, and reported as <i>potentially exposed</i>. Each 0.5&nbsp;km (area &lt;&nbsp;50&nbsp;km&sup2;) or 1&nbsp;km cell receives</p>
+<p class="eq">score = 100 &middot; <i>H</i><sup>&alpha;</sup> &middot; <i>E</i><sup>1&minus;&alpha;</sup>,&nbsp;&nbsp; &alpha; = 0.5 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(2)</p>
+<p class="ni">where <i>H</i> combines detected fraction and intensity and <i>E</i> combines log-scaled population, weighted critical facilities and road access. Cells are Critical (&ge;&nbsp;70), High (&ge;&nbsp;50) or Moderate (&ge;&nbsp;30). A life-safety floor raises a cell to High when a hospital, fire station or shelter lies inside the detected extent. Confidence is reported separately and never lowers priority, so uncertain but severe cells are checked rather than hidden. A 200-draw log-normal perturbation of the weights gives each cell&rsquo;s rank stability.</p>
+
+<h3>E. Grounded reporting and human review</h3>
+<p>Summaries and alert drafts are generated from templates (optionally by a language model) and verified: every number, date and citation must match a recorded fact (G16), and casualty claims or directive orders are blocked (G17). Alerts stay drafts until a named analyst approves them, and alerts from simulated data can never be delivered (G18). Analyst corrections are stored and recalled the next time the same area is analysed.</p>
+
+<h2>V. Implementation</h2>
+<p>The backend is a Python FastAPI service (PyTorch on CPU, rasterio, NumPy) exposing 35 endpoints with strict schema validation; each analysis runs as a background job. Results are stored in SQLite or PostgreSQL&nbsp;+&nbsp;PostGIS (13 tables, including tool calls, guardrail checks and an audit log); artefacts are exported as GeoTIFF, GeoJSON, CSV and PDF. The frontend is a React&nbsp;+&nbsp;TypeScript single-page application with MapLibre maps: a four-step wizard with place search and live archive preview, a result workspace with before/after comparison, explanations and the decision trace, and a review queue (Fig.&nbsp;2). The system includes role-based tokens, rate limiting, retries with circuit breakers, offline caching, Prometheus metrics and a Docker Compose deployment. Verification: 93 backend tests (unit, integration, API, failure injection, security; one live-network test), 32 frontend unit tests, 7 Playwright end-to-end journeys on desktop and phone, and lint and type checks, all passing.</p>
+<figure><img src="../../screenshots/23-result-answer.jpg" alt="Result page" style="width:84%;margin:0 auto">
+<figcaption>Fig. 2. Result dashboard of a completed analysis: a plain-language answer, the mapped change, the highest-priority cells with reasons, and the review status.</figcaption></figure>
+
+<h2>VI. Results</h2>
+<h3>A. Water segmentation (Sen1Floods11)</h3>
+<p>Table&nbsp;II reports water IoU on the 90-chip test split under four conditions and on the unseen Bolivia event.</p>
+<table><caption>Table II. Water IoU on Sen1Floods11</caption>
+<thead><tr><th>Method</th><th>Test</th><th>50% cloud</th><th>No S2</th><th>No S1</th><th>Bolivia</th></tr></thead>
+<tbody>
+<tr><td>Otsu VV [3]</td><td>0.431</td><td>0.431</td><td>0.431</td><td>&ndash;</td><td>0.575</td></tr>
+<tr><td>MNDWI [5]</td><td>0.653</td><td>0.378</td><td>&ndash;</td><td>0.653</td><td>0.556</td></tr>
+<tr><td>S1 U-Net</td><td>0.653</td><td>0.653</td><td>0.653</td><td>&ndash;</td><td>0.520</td></tr>
+<tr><td>S2 U-Net</td><td>0.833</td><td>0.419</td><td>&ndash;</td><td>0.833</td><td>0.818</td></tr>
+<tr><td>Early fusion</td><td>0.828</td><td>0.691</td><td>0.555</td><td>0.824</td><td>0.818</td></tr>
+<tr><td>Gated fusion v2</td><td>0.844</td><td>0.722</td><td>0.612</td><td>0.836</td><td>0.827</td></tr>
+<tr class="best"><td>Deployed hybrid</td><td>0.844</td><td>0.739</td><td>0.653</td><td>0.836</td><td>0.828</td></tr>
+</tbody></table>
+<p>The deployed model reaches F1&nbsp;0.915 (precision 0.932, recall 0.899) on the test split. Under 50&nbsp;% cloud it keeps 88&nbsp;% of its clear-sky IoU, whereas the optical-only network keeps 50&nbsp;%. Calibration lowers the expected calibration error from 0.014 to 0.005 and the negative log-likelihood from 0.097 to 0.072. MC-dropout entropy separates wrong from correct pixels with AUROC 0.885; keeping the 90&nbsp;% most confident pixels raises IoU from 0.816 to 0.939. The weakest regime is radar-only on the unseen event, where per-scene Otsu on VH (0.645) beats all learned radar models (0.520), which shows limited radar training diversity.</p>
+
+<h3>B. Agent benchmark</h3>
+<p>The full agent was run on 12 simulated scenes with known ground truth, each designed to test one behaviour (heavy cloud, missing sensor, orbit mismatch, source outages, corrupted data, missing model, invalid input), plus 8 probes that try to make it act unsafely. All 12 cases and 8 probes passed. Escalation recall and precision were both 1.0, every drafted alert passed the grounding check, and the trace was complete in every case. Under 90&nbsp;% cloud the agent let radar lead and still reached IoU 0.874; with no radar and 85&nbsp;% cloud it reached only 0.129 and correctly escalated instead of reporting a confident map. These scenes are simulated, so they test behaviour, not real-world accuracy.</p>
+
+<h3>C. Real historical events</h3>
+<p>Five past events were analysed end to end with live archive data (Table&nbsp;III). First runs took 5&ndash;10 minutes, mostly image download; cached re-runs took 2&ndash;25&nbsp;s with identical numbers. Visual checks against post-event imagery agree with the maps. There is no pixel-level ground truth for these events, so they validate the workflow and the agent&rsquo;s judgement rather than accuracy. These runs also exposed four defects that tests had missed, all of which were fixed.</p>
+<table><caption>Table III. Real-event runs</caption>
+<thead><tr><th>Event</th><th>Status</th><th>Extent km&sup2;</th><th>People*</th><th>Top</th></tr></thead>
+<tbody>
+<tr><td>Sindh flood 2022</td><td>review</td><td>78.2</td><td>7,274</td><td>High</td></tr>
+<tr><td>Emilia-Romagna 2023</td><td>warnings</td><td>31.6</td><td>118</td><td>High</td></tr>
+<tr><td>Derna 2023</td><td>review</td><td>0.03</td><td>18</td><td>Mod.</td></tr>
+<tr><td>Palisades fire 2025</td><td>review</td><td>53.9</td><td>14,407</td><td>Crit.</td></tr>
+<tr><td>Wayanad slide 2024</td><td>review</td><td>4.7</td><td>60</td><td>Mod.</td></tr>
+</tbody></table>
+<p class="ni" style="font-size:7.6pt;margin-top:-4pt">* potentially exposed, within the analysed area.</p>
+
+<h2>VII. Novelty and USP: Digital Image Processing</h2>
+<p class="ni">The core of AegisEO is a complete digital image processing (DIP) chain that turns raw satellite rasters into a decision map. Table&nbsp;IV lists each operation and where it is implemented.</p>
+<table><caption>Table IV. DIP operations in AegisEO</caption>
+<thead><tr><th>Stage</th><th style="text-align:left">Operation (source file)</th></tr></thead>
+<tbody>
+<tr><td>Geometric</td><td style="text-align:left">Reprojection and resampling to one UTM grid (<i>geo/raster.py</i>)</td></tr>
+<tr><td>Radiometric</td><td style="text-align:left">Reflectance offset, <i>&gamma;</i><sup>0</sup>&rarr;<i>&sigma;</i><sup>0</sup>, dB scaling (<i>sources/imagery.py</i>)</td></tr>
+<tr><td>Masking</td><td style="text-align:left">SCL cloud/shadow masks, validity masks (<i>sources/imagery.py</i>)</td></tr>
+<tr><td>Enhancement</td><td style="text-align:left">Lee speckle filter on SAR (<i>analysis/sar.py</i>)</td></tr>
+<tr><td>Band arithmetic</td><td style="text-align:left">MNDWI, NDVI, NBR/dNBR (<i>analysis/indices.py</i>)</td></tr>
+<tr><td>Segmentation</td><td style="text-align:left">Otsu threshold; gated-fusion U-Net (<i>ml/</i>)</td></tr>
+<tr><td>Change detection</td><td style="text-align:left">SAR log-ratio; post-classification comparison (1)</td></tr>
+<tr><td>Morphology</td><td style="text-align:left">Opening, minimum mapping unit (<i>geo/vector.py</i>)</td></tr>
+<tr><td>Vectorisation</td><td style="text-align:left">8-connected region to polygon extraction (<i>geo/vector.py</i>)</td></tr>
+</tbody></table>
+<ul class="tight">
+<li><b>Sensor-aware fusion:</b> validity-masked gates and a radar fallback keep accuracy under cloud (0.739 vs 0.419 for optical only) instead of failing silently.</li>
+<li><b>Classical and learned processing together:</b> the classical DIP results (Otsu, log-ratio, spectral indices) act as independent cross-checks of the network, and their agreement is reported to the user.</li>
+<li><b>Calibrated trust:</b> each pixel carries a calibrated probability and an uncertainty, and confidence is shown next to priority instead of lowering it.</li>
+<li><b>Auditable agent with honest outcomes:</b> 18 guardrails, a full decision trace and terminal states such as <i>needs_review</i> or <i>insufficient_data</i>.</li>
+<li><b>Grounded alerts and human control:</b> no number can appear in an alert without a recorded source, and nothing is published without a named approver.</li></ul>
+
+<h2>VIII. Limitations and Conclusion</h2>
+<p>AegisEO maps flood <i>extent</i> only; flooding that recedes before the next satellite pass is missed, and C-band radar under-detects water among buildings and under vegetation. The water model saw 10 training events, so arid, snowy and dense urban scenes are under-represented (guardrail G11 flags such inputs, as on the Sindh case). Exposure layers are of uneven completeness, priority weights are expert-set rather than fitted to response outcomes, and the wildfire and landslide modules are index-based and only qualitatively checked.</p>
+<p>We have shown that combining sensor-aware fusion, calibrated uncertainty, exposure-based ranking and a guarded agent gives disaster maps that are both more robust and more honest than either classical thresholding or a single-sensor network. Future work includes more radar-only training data, urban flood detection with SAR coherence, flood depth from elevation data and user studies to calibrate the priority weights.</p>
+
+<h2>References</h2>
+<ol class="refs">
+<li>D. Bonafilia, B. Tellman, T. Anderson, and E. Issenberg, &ldquo;Sen1Floods11: A georeferenced dataset to train and test deep learning flood algorithms for Sentinel-1,&rdquo; in <i>Proc. IEEE/CVF CVPR Workshops</i>, 2020, pp. 210&ndash;211.</li>
+<li>O. Ronneberger, P. Fischer, and T. Brox, &ldquo;U-Net: Convolutional networks for biomedical image segmentation,&rdquo; in <i>Proc. MICCAI</i>, 2015, pp. 234&ndash;241.</li>
+<li>N. Otsu, &ldquo;A threshold selection method from gray-level histograms,&rdquo; <i>IEEE Trans. Syst., Man, Cybern.</i>, vol. 9, no. 1, pp. 62&ndash;66, 1979.</li>
+<li>A. Twele, W. Cao, S. Plank, and S. Martinis, &ldquo;Sentinel-1-based flood mapping: A fully automated processing chain,&rdquo; <i>Int. J. Remote Sens.</i>, vol. 37, no. 13, pp. 2990&ndash;3004, 2016.</li>
+<li>H. Xu, &ldquo;Modification of normalised difference water index (NDWI) to enhance open water features in remotely sensed imagery,&rdquo; <i>Int. J. Remote Sens.</i>, vol. 27, no. 14, pp. 3025&ndash;3033, 2006.</li>
+<li>G. Konapala, S. V. Kumar, and S. K. Ahmad, &ldquo;Exploring Sentinel-1 and Sentinel-2 diversity for flood inundation mapping using deep learning,&rdquo; <i>ISPRS J. Photogramm. Remote Sens.</i>, vol. 180, pp. 163&ndash;173, 2021.</li>
+<li>J.-S. Lee, &ldquo;Digital image enhancement and noise filtering by use of local statistics,&rdquo; <i>IEEE Trans. Pattern Anal. Mach. Intell.</i>, vol. PAMI-2, no. 2, pp. 165&ndash;168, 1980.</li>
+<li>J.-F. Pekel, A. Cottam, N. Gorelick, and A. S. Belward, &ldquo;High-resolution mapping of global surface water and its long-term changes,&rdquo; <i>Nature</i>, vol. 540, pp. 418&ndash;422, 2016.</li>
+<li>C. H. Key and N. C. Benson, &ldquo;Landscape assessment: Ground measure of severity, the composite burn index; and remote sensing of severity, the normalized burn ratio,&rdquo; USDA Forest Service, Gen. Tech. Rep. RMRS-GTR-164-CD, 2006.</li>
+<li>C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger, &ldquo;On calibration of modern neural networks,&rdquo; in <i>Proc. ICML</i>, 2017, pp. 1321&ndash;1330.</li>
+<li>Y. Gal and Z. Ghahramani, &ldquo;Dropout as a Bayesian approximation: Representing model uncertainty in deep learning,&rdquo; in <i>Proc. ICML</i>, 2016, pp. 1050&ndash;1059.</li>
+<li>T. De Groeve, K. Poljansek, and D. Ehrlich, &ldquo;Index for Risk Management &ndash; INFORM: Concept and methodology,&rdquo; European Commission JRC, Tech. Rep. EUR 26528, 2015.</li>
+<li>S. Yao <i>et al.</i>, &ldquo;ReAct: Synergizing reasoning and acting in language models,&rdquo; in <i>Proc. ICLR</i>, 2023.</li>
+<li>T. G. Tiecke <i>et al.</i>, &ldquo;Mapping the world population one building at a time,&rdquo; arXiv:1712.05839, 2017.</li>
+</ol>
+</div>
+</body></html>

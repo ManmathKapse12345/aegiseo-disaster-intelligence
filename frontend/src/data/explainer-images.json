@@ -1,0 +1,14 @@
+{
+  "explain-sindh-2022": {
+    "analysis": "Sindh floods, Pakistan (2022)",
+    "before_date": "2022-06-27",
+    "after_date": "2022-08-31",
+    "panels": [
+      "before",
+      "after",
+      "change",
+      "priorities"
+    ],
+    "credit": "Contains modified Copernicus Sentinel data 2022; detection and priorities computed by AegisEO"
+  }
+}

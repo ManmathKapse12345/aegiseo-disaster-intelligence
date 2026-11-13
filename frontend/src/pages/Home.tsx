@@ -46,13 +46,13 @@ export function Home() {
       {/* ------------------------------------------------------------ hero */}
       <section className="hero" aria-labelledby="hero-title">
         <div>
-          <div className="eyebrow rise"><Sparkles size={16} aria-hidden /> Disaster maps from satellite photos</div>
+          <div className="eyebrow rise"><Sparkles size={16} aria-hidden /> Disaster maps from satellite images</div>
           <h1 id="hero-title" className="rise rise-1" style={{ marginTop: 16 }}>
             See where a disaster hit - and <em>where help is needed first.</em>
           </h1>
           <p className="lead rise rise-2">
-            AegisEO compares satellite photos from before and after a flood, wildfire or landslide. It shows what changed,
-            who lives there, and which places to check first. A person always makes the final call.
+            AegisEO compares satellite images taken before and after a flood, wildfire or landslide. It shows what changed,
+            estimates who lives there, and suggests which places to check first. A person makes every decision.
           </p>
           <div className="hero-actions rise rise-3">
             <Link to="/check" className="btn btn-primary btn-lg">Check a place <ArrowRight size={18} className="arrow" aria-hidden /></Link>
@@ -62,12 +62,12 @@ export function Home() {
               <Link to="/check?scenario=synthetic-flood" className="btn btn-lg"><FlaskConical size={18} aria-hidden /> Try a practice run</Link>
             )}
           </div>
-          <p className="hero-note rise rise-4"><Clock3 size={15} aria-hidden /> Free satellite data · nothing to install · results in a few minutes</p>
+          <p className="hero-note rise rise-4"><Clock3 size={15} aria-hidden /> Free satellite data · nothing to install · results in minutes</p>
         </div>
         <div className="hero-visual rise rise-2">
-          <figure className="scan-figure auto" style={{ margin: 0 }} aria-label="The same place before and after the 2022 Sindh floods. The after photo slides over the before photo.">
-            <img src="/images/explain-sindh-2022-before.jpg" alt="Satellite photo before the floods: dry fields around a town." width={720} height={803} />
-            <img className="after" src="/images/explain-sindh-2022-after.jpg" alt="Satellite photo after the floods: large areas of water to the east of the town." width={720} height={803} />
+          <figure className="scan-figure auto" style={{ margin: 0 }} aria-label="The same place before and after the 2022 Sindh floods. The 'after' image slides over the 'before' image.">
+            <img src="/images/explain-sindh-2022-before.jpg" alt="Optical satellite image before the floods: dry fields around a town." width={720} height={803} />
+            <img className="after" src="/images/explain-sindh-2022-after.jpg" alt="Optical satellite image after the floods: large areas of water to the east of the town." width={720} height={803} />
             <span className="split-line" aria-hidden />
             <span className="scan-tag left">Before{C?.before_date ? ` · ${fmtDate(C.before_date)}` : ""}</span>
             <span className="scan-tag right">After{C?.after_date ? ` · ${fmtDate(C.after_date)}` : ""}</span>
@@ -89,8 +89,8 @@ export function Home() {
             <span className="choice-icon"><MapPinned size={26} aria-hidden /></span>
             <span>
               <h3>Check a place</h3>
-              <p>Choose any place on the map and the date something happened. AegisEO looks for damage in satellite photos.</p>
-              <span className="expect"><Clock3 size={14} aria-hidden /> 3 quick questions, then results in about 2-6 minutes</span>
+              <p>Choose any place on the map and the date something happened. AegisEO looks for flooding, burned land or landslides in satellite images.</p>
+              <span className="expect"><Clock3 size={14} aria-hidden /> 3 quick questions, then results in about 2-10 minutes</span>
             </span>
             <ArrowRight size={22} className="go" aria-hidden />
           </Link>
@@ -108,7 +108,7 @@ export function Home() {
             <span>
               <h3>Look at disasters happening now</h3>
               <p>See current flood, storm and wildfire alerts from around the world, and check one of them.</p>
-              <span className="expect"><Clock3 size={14} aria-hidden /> Live alerts from GDACS, updated every few minutes</span>
+              <span className="expect"><Clock3 size={14} aria-hidden /> Live alerts from GDACS, refreshed at most every 10 minutes</span>
             </span>
             <ArrowRight size={22} className="go" aria-hidden />
           </Link>
@@ -133,7 +133,7 @@ export function Home() {
             <span className="grow">
               <strong style={{ fontSize: "var(--fs-lg)" }}>A person needs to look at {waitingTasks + waitingAlerts} item{waitingTasks + waitingAlerts === 1 ? "" : "s"}</strong>
               <span className="small muted" style={{ display: "block" }}>
-                {waitingTasks} unsure finding{waitingTasks === 1 ? "" : "s"} to double-check and {waitingAlerts} draft warning{waitingAlerts === 1 ? "" : "s"} waiting for approval.
+                {waitingTasks} finding{waitingTasks === 1 ? "" : "s"} to double-check and {waitingAlerts} draft warning{waitingAlerts === 1 ? "" : "s"} to approve or reject.
               </span>
             </span>
             <span className="btn">Review now <ArrowRight size={16} className="arrow" aria-hidden /></span>
@@ -153,7 +153,7 @@ export function Home() {
         <ExplainerStrip />
         <div className="callout neutral" style={{ marginTop: 24 }}>
           <ShieldCheck size={20} aria-hidden />
-          <span><strong>A person stays in charge.</strong> When AegisEO is unsure, it asks someone to check. Warnings are only drafts until a person approves them.</span>
+          <span><strong>A person stays in charge.</strong> When the evidence is weak, AegisEO asks a person to double-check. Warnings are only drafts until a person approves them.</span>
         </div>
       </section>
 

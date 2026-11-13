@@ -16,10 +16,13 @@ import { fmtArea, fmtDate, fmtInt, timeAgo } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 import { ACTIVE, CHECKS, FINISHED, HAZARDS, PRIORITY, STATUS } from "@/lib/meta";
 import { RUN_STAGES, areaPicture, friendlyError, headline, runStageIndex, topCategory } from "@/lib/plain";
+import { useMapExpand } from "@/components/map/expand";
 import { AlertCard, ReviewCard } from "../review/ReviewCards";
 import { EvidencePanel, PeoplePanel, PrioritiesPanel, TraceView } from "./ResultPanels";
 
 const AnalysisMap = lazy(() => import("@/components/map/AnalysisMap").then((m) => ({ default: m.AnalysisMap })));
+/** Measured on the project's real runs (data/aegis.db): first checks of 77-407 km² took 5-10 minutes, mostly downloading. */
+const RUN_TIME_REAL = "Usually 2 to 10 minutes for an area checked for the first time (most of that time is spent downloading images). Checking the same area again is much faster, because the images are saved.";
 type TabId = "where" | "people" | "how" | "review";
 const STAGE_ICONS = [Check, Binoculars, ScanSearch, Users, ListOrdered];
 
@@ -38,6 +41,7 @@ export function ResultPage() {
   const [tab, setTab] = useState<TabId>("where");
   const [selected, setSelected] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const mapSize = useMapExpand();
   useDocumentTitle(a?.name ?? "Result");
   // a new tab starts at its top (the panel scrolls on its own on wide screens)
   useEffect(() => {
@@ -65,7 +69,9 @@ export function ResultPage() {
       </div>
     );
   }
-  const reviewCount = (a.counts.alerts_pending ?? 0) + (a.counts.reviews_open ?? 0);
+  const findingsOpen = a.counts.reviews_open ?? 0;
+  const warningsWaiting = a.counts.alerts_pending ?? 0;
+  const reviewCount = findingsOpen + warningsWaiting;
   const urgent = (a.summary?.distribution?.Critical ?? 0) + (a.summary?.distribution?.High ?? 0);
   const selectCell = (cid: string | null) => {
     setSelected(cid);
@@ -91,13 +97,13 @@ export function ResultPage() {
 
       {done && (
         <>
-          <Answer a={a} trace={trace.data} onReview={() => setTab("review")} reviewCount={reviewCount} />
+          <Answer a={a} trace={trace.data} onReview={() => setTab("review")} findingsOpen={findingsOpen} warningsWaiting={warningsWaiting} />
           <div className="workspace" id="workspace">
-            <div className="map-frame map-card">
+            <div className={`map-frame map-card ${mapSize.expanded ? "map-expanded" : ""}`}>
               {layers.isError && <div style={{ padding: 16 }}><ErrorState error={layers.error} onRetry={() => layers.refetch()} /></div>}
               <Suspense fallback={<div style={{ display: "grid", placeItems: "center", height: "100%" }}><Loading label="Loading the map" /></div>}>
                 <AnalysisMap aoi={a.aoi} bbox={a.bbox} hazard={a.hazard} layers={layers.data ?? []} detections={det.data} cells={cells.data}
-                  facilities={fac.data} selectedCell={selected} onSelectCell={selectCell} />
+                  facilities={fac.data} selectedCell={selected} onSelectCell={selectCell} expanded={mapSize.expanded} onToggleExpand={mapSize.toggle} />
               </Suspense>
             </div>
             <section className="panel" aria-label="Details">
@@ -106,7 +112,7 @@ export function ResultPage() {
                   { id: "where", label: "Where to help first", icon: <ListOrdered size={17} aria-hidden />, badge: urgent || undefined },
                   { id: "people", label: "People & places", icon: <Users size={17} aria-hidden /> },
                   { id: "how", label: "How we know", icon: <ScanSearch size={17} aria-hidden /> },
-                  { id: "review", label: "Needs your OK", icon: <ClipboardCheck size={17} aria-hidden />, badge: reviewCount || undefined },
+                  { id: "review", label: "To review", icon: <ClipboardCheck size={17} aria-hidden />, badge: reviewCount || undefined },
                 ]} />
               </div>
               <div className="panel-body" id="rt-panel" role="tabpanel" aria-labelledby={`rt-tab-${tab}`} ref={panelRef}>
@@ -152,7 +158,7 @@ function Header({ a, active, done }: { a: AnalysisDetail; active: boolean; done:
         <div className="result-meta">
           <span><CalendarDays size={16} aria-hidden /> Happened {fmtDate(a.event_date)}</span>
           <span><Ruler size={16} aria-hidden /> Area checked: {fmtArea(a.area_km2)}</span>
-          <span>Photos: before {fmtDate(a.pre_window[0], { day: "numeric", month: "short" })} - {fmtDate(a.pre_window[1])}, after {fmtDate(a.post_window[0], { day: "numeric", month: "short" })} - {fmtDate(a.post_window[1])}</span>
+          <span>Image searches: before {fmtDate(a.pre_window[0], { day: "numeric", month: "short" })} - {fmtDate(a.pre_window[1])}, after {fmtDate(a.post_window[0], { day: "numeric", month: "short" })} - {fmtDate(a.post_window[1])}</span>
           <span>Run {timeAgo(a.created_at)} by {a.created_by}</span>
         </div>
       </div>
@@ -211,12 +217,22 @@ function Downloads({ a }: { a: AnalysisDetail }) {
 }
 
 // ============================================================================ the answer
-function Answer({ a, trace, onReview, reviewCount }: { a: AnalysisDetail; trace?: Trace; onReview: () => void; reviewCount: number }) {
+function Answer({ a, trace, onReview, findingsOpen, warningsWaiting }: {
+  a: AnalysisDetail; trace?: Trace; onReview: () => void; findingsOpen: number; warningsWaiting: number;
+}) {
   const hl = headline(a);
   const s = a.summary;
   const h = HAZARDS[a.hazard];
+  const reviewCount = findingsOpen + warningsWaiting;
   const notes = (trace?.guardrails ?? []).filter((g) => g.outcome === "warn" || g.outcome === "escalate");
   const uniq = [...new Map(notes.map((g) => [g.code, g])).values()];
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  // episodic memory (backend/aegis/agents/memory.py): corrections people made to earlier checks of an overlapping area
+  const memory = trace?.steps.find((st) => st.phase === "memory" && Array.isArray((st.data as { analyst_corrections?: unknown })?.analyst_corrections))?.data as
+    { analyst_corrections: unknown[]; cases?: { analysis_id: string; name: string }[] } | undefined;
+  const corrections = memory?.analyst_corrections.length ?? 0;
+  const waitingText = [findingsOpen ? plural(findingsOpen, "finding to double-check", "findings to double-check") : "",
+    warningsWaiting ? plural(warningsWaiting, "draft warning to approve or reject", "draft warnings to approve or reject") : ""].filter(Boolean).join(" and ");
   if (!hl || !s) return null;
   const frac = a.results?.hazard?.quality?.affected_fraction_of_aoi;
   const top = topCategory(s.distribution);
@@ -244,16 +260,32 @@ function Answer({ a, trace, onReview, reviewCount }: { a: AnalysisDetail; trace?
         <ConfidenceMeter level={a.confidence} />
         {reviewCount > 0 && (
           <div style={{ marginTop: 16 }}>
-            <Callout tone="warn" title={`A person should look at ${reviewCount} item${reviewCount === 1 ? "" : "s"} first`}>
-              <span>AegisEO wasn't sure about some things, or has draft warnings waiting. <button className="linklike" onClick={() => { onReview(); document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Review them now</button></span>
+            <Callout tone="warn" title={`${reviewCount} item${reviewCount === 1 ? " is" : "s are"} waiting for a person's decision`}>
+              <span>{waitingText}. Until a person decides, nothing is sent and the results stay as AegisEO produced them.{" "}
+                <button className="linklike" onClick={() => { onReview(); document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Review them now</button></span>
             </Callout>
           </div>
         )}
         {uniq.length > 0 && (
           <div style={{ marginTop: 12 }}>
-            <Disclosure summary={`Things to keep in mind (${uniq.length})`}>
-              <ul className="small ink-2">{uniq.map((g) => <li key={g.code}><strong>{CHECKS[g.code]?.title ?? g.name}.</strong> {CHECKS[g.code]?.why ?? g.message}</li>)}</ul>
+            <Disclosure summary={`Safety-check notes (${uniq.length})`}>
+              <p className="small ink-2" style={{ marginBottom: 8 }}>
+                AegisEO's automatic safety checks reported these points. A <strong>note</strong> needs no action, but read it before relying on the result.
+                A point marked <strong>needs a person</strong> also created a finding to double-check under To review.
+              </p>
+              <ul className="small ink-2">{uniq.map((g) => (
+                <li key={g.code}><strong>{CHECKS[g.code]?.title ?? g.name}</strong> <span className="chip outline" style={{ minHeight: 20, fontSize: "0.72rem" }}>{g.outcome === "escalate" ? "needs a person" : "note"}</span>{" "}
+                  {CHECKS[g.code]?.why ?? g.message}</li>))}</ul>
             </Disclosure>
+          </div>
+        )}
+        {corrections > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <Callout tone="info" title="People corrected earlier checks of this area">
+              {plural(corrections, "correction was", "corrections were")} recorded on earlier checks that overlap this area (findings marked wrong, priorities
+              changed or warnings rejected). AegisEO did not change this result because of them. Compare with:{" "}
+              {(memory?.cases ?? []).slice(0, 3).map((c, i) => <span key={c.analysis_id}>{i > 0 && ", "}<Link to={`/results/${c.analysis_id}`}>{c.name}</Link></span>)}.
+            </Callout>
           </div>
         )}
       </div>
@@ -271,8 +303,8 @@ function Answer({ a, trace, onReview, reviewCount }: { a: AnalysisDetail; trace?
       <div className="card card-pad">
         <h4 style={{ fontSize: "1.125rem" }}>What you can do next</h4>
         <ol className="small ink-2" style={{ marginTop: 10, paddingLeft: 20 }}>
-          <li><button className="linklike" onClick={() => document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Look at the map</button>: coloured squares show where to look first. Press <em>Compare before / after</em> to see the change yourself.</li>
-          {reviewCount > 0 && <li><button className="linklike" onClick={() => { onReview(); document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Answer the {reviewCount} waiting item{reviewCount === 1 ? "" : "s"}</button> - they need a person's OK.</li>}
+          <li><button className="linklike" onClick={() => document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Look at the map</button>: coloured squares show where to look first. Press <em>Compare before / after</em> to see the change yourself, and <em>Expand map</em> to make the map fill the window.</li>
+          {reviewCount > 0 && <li><button className="linklike" onClick={() => { onReview(); document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Decide on the {reviewCount} waiting item{reviewCount === 1 ? "" : "s"}</button> in the <em>To review</em> tab.</li>}
           <li><a href={apiUrl(`/api/analyses/${a.id}/reports/pdf`)}>Download the report (PDF)</a> to share it or print it.</li>
         </ol>
       </div>
@@ -318,7 +350,7 @@ function RunProgress({ a, trace }: { a: AnalysisDetail; trace?: Trace }) {
         })}
       </ol>
       <p className="small muted" style={{ marginTop: 12 }}>
-        {a.mode === "synthetic" ? "Practice runs usually take under a minute." : "This usually takes 2 to 6 minutes."} You can leave this page - the check keeps running and you'll find it under Results.
+        {a.mode === "synthetic" ? "Practice runs usually take under a minute." : RUN_TIME_REAL} You can leave this page: the check keeps running on the server and you'll find it under Results.
       </p>
       {trace && trace.steps.length > 0 && (
         <div style={{ marginTop: 12 }}>
@@ -336,9 +368,9 @@ function RunProgress({ a, trace }: { a: AnalysisDetail; trace?: Trace }) {
 // ============================================================================ didn't finish
 const TIPS: Record<string, string[]> = {
   insufficient_data: [
-    "Make the 'after' search longer - radar satellites pass every 6 to 12 days.",
-    "Check that the date is right: the 'after' photos must be taken after the event.",
-    "Wildfires and landslides need a clear photo before and after; try a longer 'before' search.",
+    "Make the 'after' search longer by moving its end date later. A radar satellite usually images the same place only every 6 to 12 days.",
+    "Check that the date is right: the 'after' images must be taken on or after the day of the event.",
+    "Wildfires and landslides need a clear optical image from before and after; try a longer 'before' search.",
   ],
   rejected: ["Some choices weren't valid. Start a new check and adjust the area or dates."],
   failed: ["Run it again - short outages of the data services are common and usually pass.", "If it keeps failing, look at 'Where the data comes from' to see which service is down."],
@@ -397,7 +429,11 @@ function ReviewPanel({ a, onOpenMap }: { a: AnalysisDetail; onOpenMap: (cell: st
   const decided = (alerts.data?.items ?? []).filter((x) => x.status !== "pending_review");
   return (
     <div className="stack-lg">
-      <p className="small ink-2">AegisEO doesn't act on its own. Unsure findings and draft warnings wait here until a person decides.</p>
+      <p className="small ink-2">
+        AegisEO does not act on its own. Two kinds of items wait here for a person: <strong>findings to double-check</strong> (a safety check needed human
+        judgement, or a high-priority square has weak evidence) and <strong>draft warnings</strong> (messages that are sent only if a person approves them).
+        Your decision is saved with your name. <Link to="/review#how">How reviewing works</Link>
+      </p>
       <div>
         <h3 style={{ fontSize: "1.25rem", marginBottom: 12 }}>Findings to double-check ({open.length})</h3>
         {reviews.isLoading && <Loading />}

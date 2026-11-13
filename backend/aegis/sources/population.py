@@ -43,12 +43,12 @@ class PopulationSource:
     # ------------------------------------------------------------------ HRSL
     def hrsl_on_grid(self, aoi: AOI, grid: Grid) -> tuple[np.ndarray | None, dict[str, Any]]:
         """People per analysis-grid pixel from HRSL, or (None, reason)."""
-        if self.settings.offline:
-            return None, {"status": "unavailable", "reason": "offline mode"}
         cache = self.settings.cache_dir / "population" / f"hrsl_{grid.key()}.npy"
-        if cache.exists():
+        if cache.exists():  # checked before the offline switch: offline mode serves cached data
             arr = np.load(cache)
             return arr, {"status": "ok", "source": "HRSL (cached)", "url": HRSL_URL}
+        if self.settings.offline:
+            return None, {"status": "unavailable", "reason": "offline mode and no cached HRSL window for this grid"}
         minx, miny, maxx, maxy = grid.bounds_wgs84()
         pad = 0.01
         try:
@@ -90,14 +90,14 @@ class PopulationSource:
                 return obj
         raise ValueError("no JSON object in WorldPop response")
 
-    def worldpop_total(self, geometry: dict[str, Any], year: int = 2020) -> tuple[float | None, dict[str, Any]]:
+    def worldpop_total(self, geometry: dict[str, Any], year: int = 2020, use_cache: bool = True) -> tuple[float | None, dict[str, Any]]:
         fc = {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": geometry}]}
         gj = json.dumps(fc, separators=(",", ":"))
         if len(gj) > 6000:
             return None, {"status": "skipped", "reason": "geometry too complex for the WorldPop GET API"}
         try:
             res = self.worldpop.get(self.settings.worldpop_stats_url, params={
-                "dataset": "wpgppop", "year": str(min(max(year, 2000), 2020)), "geojson": gj, "runasync": "false"})
+                "dataset": "wpgppop", "year": str(min(max(year, 2000), 2020)), "geojson": gj, "runasync": "false"}, use_cache=use_cache)
             data = self._extract_json(res.text)
         except (SourceUnavailableError, ValueError) as exc:
             return None, {"status": "unavailable", "reason": str(exc)[:300]}
@@ -111,7 +111,7 @@ class PopulationSource:
 
     def health(self) -> dict[str, Any]:
         tiny = {"type": "Polygon", "coordinates": [[[67.70, 26.60], [67.71, 26.60], [67.71, 26.61], [67.70, 26.61], [67.70, 26.60]]]}
-        total, info = self.worldpop_total(tiny)
+        total, info = self.worldpop_total(tiny, use_cache=False)  # a live answer, not a 30-day cached one
         return {"status": "operational" if total is not None else "unavailable", **({} if total is not None else {"error": info.get("reason")})}
 
 

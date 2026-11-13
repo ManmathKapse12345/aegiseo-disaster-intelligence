@@ -1,0 +1,75 @@
+DiP PROJECT SUBMISSION GUIDE  -  AegisEO
+Deadline: 12 November 2026, 07:00 IST (strict)
+
+Each team member submits the form SEPARATELY, using ONLY the files in his own folder:
+  Manmath Kapse        -> MANMATH_KAPSE_23CD3024\
+  Pravesh Kumar Patel  -> PRAVESH_KUMAR_PATEL_23CD3029\
+
+Inside each member's folder:
+  1_Form_IEEE_Paper\          1 PDF   -> form field "Four-page IEEE Conference Paper (PDF)"
+  2_Form_Supporting_Files\    10 files -> form field "Supporting Project Files (NO ZIP)"
+  3_Google_Drive_Folder\      1 folder -> upload to Google Drive, paste its link in the form
+
+----------------------------------------------------------------------
+STEP 1  Upload the project folder to Google Drive  (about 10 minutes)
+----------------------------------------------------------------------
+ 1. Open https://drive.google.com and sign in with YOUR OWN college Google account.
+ 2. Open on your computer:  <your folder>\3_Google_Drive_Folder\
+ 3. Drag the folder named with your name and roll number
+    (e.g. MANMATH_KAPSE_23CD3024) into Google Drive. Wait until the upload
+    box says all items are uploaded (about 36 MB).
+ 4. In Drive, right-click that folder -> Share -> Share.
+ 5. Under "General access" change "Restricted" to "Anyone with the link", role "Viewer". Click Done.
+ 6. Right-click the folder again -> Share -> Copy link.
+ 7. Test: paste the link in a private / incognito window. You must see the
+    folders 00_IEEE_Paper ... 09_Project_Report_and_Presentation without signing in.
+
+The Drive folder is organised by the eight required components:
+  00_IEEE_Paper
+  01_Problem_Statement
+  02_State_of_the_Art
+  03_Methodology_Flowchart_Pseudocode      (+ flowchart and model diagram images)
+  04_Implementation_Source_Code            (+ architecture diagram, full source code)
+  05_Dataset_and_Data_Sources
+  06_Novelty_USP_Digital_Image_Processing
+  07_Results_and_Dashboards                (+ 53 dashboard screenshots)
+  08_References
+  09_Project_Report_and_Presentation       (optional project report and PPT)
+
+----------------------------------------------------------------------
+STEP 2  Fill in the form
+----------------------------------------------------------------------
+ 1. Open the submission form, signed in with the same Google account.
+ 2. Email: tick "Record ... as the email to be included with my response".
+ 3. Project Google Drive Folder Link (Name_RollNumber): paste the link from Step 1.
+ 4. Four-page IEEE Conference Paper (PDF): click "Add file" -> Browse ->
+    select the ONE file in  1_Form_IEEE_Paper\  -> Upload.
+ 5. Supporting Project Files (NO ZIP): click "Add file" -> Browse ->
+    open  2_Form_Supporting_Files\ , press Ctrl+A to select all 10 files -> Upload.
+    (Maximum is 10 files, 10 MB each - these are exactly 10 and all are under 10 MB.)
+       01_Problem_Statement.pdf
+       02_State_of_the_Art.pdf
+       03_Methodology_Flowchart_Pseudocode.pdf
+       04_Implementation_Source_Code.pdf
+       05_Dataset_and_Data_Sources.pdf
+       06_Novelty_USP_Digital_Image_Processing.pdf
+       07_Results_and_Dashboards.pdf
+       08_References.pdf
+       09_Full_Project_Report.pdf      (optional detailed report)
+       10_Presentation.pptx            (optional PPT)
+ 6. Student Full Name:   Manmath Kapse          /  Pravesh Kumar Patel
+ 7. Project Title:       AegisEO: An Agentic Radar-Optical Satellite Image Processing Pipeline
+                         for Disaster Change Detection and Response Prioritisation
+ 8. Roll Number:         23CD3024               /  23CD3029
+ 9. Department:          CSD
+10. Check every field once more, then click Submit.
+11. You should see the confirmation page; a copy of the response is sent to your email
+    if the form offers it - keep it as proof of submission.
+
+Notes
+ - Every file starts with Name_RollNumber_ as required. Source-code files inside the
+   Drive folder keep their original names (renaming them would break the program);
+   they are inside a folder named <Name_RollNumber>_Source_Code.
+ - Do not upload ZIP files anywhere.
+ - If an upload fails, check your internet connection and upload that file again;
+   do not change the file names.

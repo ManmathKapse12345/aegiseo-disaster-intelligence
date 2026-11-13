@@ -1,0 +1,132 @@
+<section class="chapter">
+  <h1><span class="num">Appendix A</span>Commands and settings</h1>
+
+  <h2>A.1 Installing and starting AegisEO</h2>
+  <p>Requirements: Python 3.11 to 3.13, Node.js 20 or newer, and internet access for live data (practice runs work without it). On Windows:</p>
+<pre><code><span class="c"># backend (first terminal)</span>
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install torch --index-url https://download.pytorch.org/whl/cpu    <span class="c"># or /whl/cu126 for an NVIDIA GPU</span>
+pip install -r requirements-dev.txt
+pip install -e . --no-deps
+uvicorn aegis.main:app --port 8000
+
+<span class="c"># frontend (second terminal)</span>
+cd frontend
+npm install
+npm run dev                                                           <span class="c"># http://localhost:5173</span></code></pre>
+  <p>Alternatives: <code>docker compose up --build</code> starts PostgreSQL with PostGIS, the API and the web server (http://localhost:8080); <code>deploy\tunnel\start-public.ps1</code> shares the local installation through a temporary public link; <code>deploy/huggingface</code> and <code>deploy/oracle</code> contain the two cloud deployments.</p>
+
+  <h2>A.2 Tests and checks</h2>
+<pre><code>cd backend
+python -m pytest                          <span class="c"># 93 tests; the live one is skipped without --network</span>
+python -m pytest --network -m network     <span class="c"># live Planetary Computer search</span>
+python -m ruff check aegis tests          <span class="c"># Python checks</span>
+python -m aegis.benchmark                 <span class="c"># 12 scenarios + 8 safety probes; writes docs/benchmark_results.md</span>
+
+cd frontend
+npm run typecheck                         <span class="c"># TypeScript</span>
+npm test                                  <span class="c"># Vitest unit tests</span>
+npx playwright test                       <span class="c"># end-to-end; E2E_WEB_PORT / E2E_API_PORT move the ports</span>
+npm run build                             <span class="c"># production build in frontend/dist</span></code></pre>
+
+  <h2>A.3 Reproducing the trained models</h2>
+<pre><code>cd backend
+python scripts/download_sen1floods11.py --out ../data/datasets/sen1floods11              <span class="c"># about 1.8 GB</span>
+python -m aegis.ml.prepare --raw ../data/datasets/sen1floods11 --out ../data/datasets/sen1floods11_prepared
+python scripts/train_all.py --data ../data/datasets/sen1floods11_prepared --models ../models
+<span class="c"># the evaluation writes models/evaluation.json and models/selection.json</span>
+python -m aegis.ml.evaluate --data ../data/datasets/sen1floods11_prepared --models ../models</code></pre>
+
+  <h2>A.4 Main settings</h2>
+  <p>All settings are environment variables beginning with <code>AEGIS_</code>, read from the environment or from a <code>.env</code> file (a template without values is <code>.env.example</code>). Values marked "secret" are stored so that they are never printed or returned by the API.</p>
+  <table class="compact">
+    <thead><tr><th style="width:34%">Setting</th><th style="width:20%">Default</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>AEGIS_MAX_AOI_KM2</code> / <code>AEGIS_MIN_AOI_KM2</code></td><td>1500 / 0.25</td><td>Largest and smallest area per check (safety check G02 and the interface, through <code>/api/config</code>).</td></tr>
+      <tr><td><code>AEGIS_DEFAULT_RESOLUTION_M</code></td><td>20</td><td>Pixel size when a request does not give one.</td></tr>
+      <tr><td><code>AEGIS_MAX_GRID_PIXELS</code></td><td>2,600,000</td><td>Pixel budget; above it the pixel size is coarsened in 10 m steps.</td></tr>
+      <tr><td><code>AEGIS_WORKER_THREADS</code></td><td>2</td><td>Checks that can run at the same time.</td></tr>
+      <tr><td><code>AEGIS_TORCH_DEVICE</code></td><td>auto</td><td><code>cpu</code>, <code>cuda</code> (NVIDIA GPU) or automatic choice.</td></tr>
+      <tr><td><code>AEGIS_OFFLINE</code></td><td>false</td><td>No network access; only saved data is used.</td></tr>
+      <tr><td><code>AEGIS_DATA_DIR</code>, <code>AEGIS_DATABASE_URL</code></td><td><code>data/</code>, SQLite</td><td>Where the database, saved images and result files are kept; a PostgreSQL address can be given instead.</td></tr>
+      <tr><td><code>AEGIS_AUTH_ENABLED</code>, <code>AEGIS_API_TOKENS</code> (secret)</td><td>false, empty</td><td>Sign-in with tokens and the roles viewer, analyst and admin.</td></tr>
+      <tr><td><code>AEGIS_RATE_LIMIT_PER_MINUTE</code></td><td>240</td><td>Requests that change data, per client and minute.</td></tr>
+      <tr><td><code>AEGIS_ALERT_WEBHOOK_URL</code> (secret)</td><td>empty</td><td>Where approved warnings are sent; empty means they stay in AegisEO.</td></tr>
+      <tr><td><code>AEGIS_FIRMS_MAP_KEY</code> (secret)</td><td>empty</td><td>NASA FIRMS key for fire detections older than 7 days.</td></tr>
+      <tr><td><code>AEGIS_ANTHROPIC_API_KEY</code> (secret), <code>AEGIS_LLM_ENABLED</code></td><td>empty, true</td><td>Optional Claude wording of the summary; without a key, templates are used.</td></tr>
+      <tr><td><code>AEGIS_RUN_TIMEOUT_S</code>, <code>AEGIS_MC_DROPOUT_SAMPLES</code></td><td>1800, 6</td><td>Defined, but they do not change how a check runs (Section 14.8).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="chapter">
+  <h1><span class="num">Appendix B</span>API endpoints</h1>
+  <p>The backend's interactive API documentation is served at <code>/docs</code> while it runs. Requests are validated strictly (unknown fields are rejected), every error has the same form (<code>{"error": {"code", "message", "request_id"}}</code>), and when sign-in is enabled every request needs a token.</p>
+  <table class="compact">
+    <thead><tr><th style="width:10%">Method</th><th style="width:38%">Path</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>GET</td><td><code>/api/health</code>, <code>/api/health/ready</code></td><td>Is the server running; are the database, model and workers ready.</td></tr>
+      <tr><td>GET</td><td><code>/api/config</code></td><td>Limits and optional features of this server (new in this round).</td></tr>
+      <tr><td>GET</td><td><code>/api/me</code></td><td>The current user and role.</td></tr>
+      <tr><td>GET</td><td><code>/api/sources</code></td><td>Every data source with its live status.</td></tr>
+      <tr><td>GET</td><td><code>/api/events/live</code></td><td>Current GDACS alerts and USGS earthquakes.</td></tr>
+      <tr><td>GET</td><td><code>/api/scenarios</code>, <code>/api/places?q=</code></td><td>Case studies; place-name search.</td></tr>
+      <tr><td>POST</td><td><code>/api/catalog/preview</code></td><td>List satellite passes for an area and dates, without starting a check.</td></tr>
+      <tr><td>GET</td><td><code>/api/dashboard</code>, <code>/api/model</code>, <code>/api/knowledge</code></td><td>Overview figures; the deployed model and its evaluation; the method documents.</td></tr>
+      <tr><td>POST</td><td><code>/api/analyses</code></td><td>Create and queue a check.</td></tr>
+      <tr><td>GET</td><td><code>/api/analyses</code>, <code>/api/analyses/{id}</code>, <code>/{id}/status</code></td><td>List checks; one check with its results; its progress.</td></tr>
+      <tr><td>POST</td><td><code>/api/analyses/{id}/cancel</code>, <code>/{id}/rerun</code></td><td>Stop a check; run a copy again.</td></tr>
+      <tr><td>DELETE</td><td><code>/api/analyses/{id}</code></td><td>Delete a finished check (admin).</td></tr>
+      <tr><td>GET</td><td><code>/{id}/detections</code>, <code>/{id}/priorities</code>, <code>/{id}/facilities</code></td><td>Detected areas, priority squares and places as GeoJSON.</td></tr>
+      <tr><td>PATCH</td><td><code>/{id}/priorities/{cell_id}</code></td><td>A person changes a square's priority, with a reason.</td></tr>
+      <tr><td>GET</td><td><code>/{id}/trace</code>, <code>/{id}/layers</code>, <code>/{id}/reports/{pdf|csv|geojson}</code>, <code>/{id}/exports/products.tif</code></td><td>The full record; map layers; reports; the GeoTIFF of probability, extent and uncertainty.</td></tr>
+      <tr><td>GET, POST</td><td><code>/api/alerts</code>, <code>/api/alerts/{id}/decision</code></td><td>Draft warnings; approve or reject with a note.</td></tr>
+      <tr><td>GET, POST</td><td><code>/api/reviews</code>, <code>/api/reviews/{id}/decision</code></td><td>Findings; decide <code>confirm</code>, <code>false_positive</code>, <code>acknowledge</code> or <code>request_rerun</code>.</td></tr>
+      <tr><td>GET, POST</td><td><code>/api/benchmarks</code>, <code>/api/benchmarks/run</code></td><td>Benchmark results; start a benchmark (admin).</td></tr>
+      <tr><td>GET</td><td><code>/metrics</code></td><td>Operational measurements for monitoring tools (Prometheus format).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="chapter">
+  <h1><span class="num">Appendix C</span>Changes made in this round, file by file</h1>
+  <p>Base: commit <code>b5b60a9</code>. All changes below are in the working copy and have not yet been committed.</p>
+  <h2>C.1 Backend</h2>
+  <table class="compact">
+    <thead><tr><th style="width:36%">File</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td><code>aegis/api/routes_system.py</code></td><td>New <code>GET /api/config</code> (limits and feature switches, no secrets).</td></tr>
+      <tr><td><code>aegis/api/schemas.py</code>, <code>routes_analyses.py</code></td><td>Weights need a positive value in each group (HTTP 422 otherwise); the pixel size defaults to the server setting.</td></tr>
+      <tr><td><code>aegis/sources/feeds.py</code>, <code>population.py</code>, <code>registry.py</code></td><td>Status checks contact the services and bypass the cache; FIRMS has a real check; offline mode uses the cached population layer.</td></tr>
+      <tr><td><code>tests/test_api.py</code>, <code>tests/test_net_sources.py</code></td><td>Five new tests for the changes above.</td></tr>
+    </tbody>
+  </table>
+  <h2>C.2 Frontend</h2>
+  <table class="compact">
+    <thead><tr><th style="width:36%">File</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/lib/limits.ts</code> (new)</td><td>The server's limits as a hook (<code>useLimits</code>) and the pixel-size prediction.</td></tr>
+      <tr><td><code>src/components/map/expand.tsx</code> (new), <code>AoiPicker.tsx</code>, <code>AnalysisMap.tsx</code></td><td>Expandable map; separate icon for "zoom to area"; clearer labels; size chips.</td></tr>
+      <tr><td><code>src/pages/check/StepWhere.tsx</code>, <code>StepWhatWhen.tsx</code>, <code>StepStart.tsx</code>, <code>CheckWizard.tsx</code>, <code>draft.ts</code></td><td>Area-limit explanation; rewritten revisit explanation; image check counts only usable passes; renamed and explained settings; weight validation; minimum of 2 uncertainty samples; limits from the server.</td></tr>
+      <tr><td><code>src/pages/review/ReviewPage.tsx</code>, <code>ReviewCards.tsx</code></td><td>"How reviewing works"; decision texts that depend on whether a delivery channel exists.</td></tr>
+      <tr><td><code>src/pages/results/ResultPage.tsx</code>, <code>ResultPanels.tsx</code>, <code>ResultsList.tsx</code></td><td>Findings and warnings counted separately; safety-check notes explained; earlier corrections shown; measured run times; wording.</td></tr>
+      <tr><td><code>src/pages/about/About.tsx</code>, <code>Accuracy.tsx</code>, <code>accuracyData.ts</code>, <code>DataSources.tsx</code>, <code>src/pages/Home.tsx</code></td><td>"Have a question?" removed; metaphors removed; wording.</td></tr>
+      <tr><td><code>src/lib/plain.ts</code>, <code>src/lib/meta.tsx</code>, <code>ExplainerStrip.tsx</code>, <code>illustrations.tsx</code></td><td>Plain-language texts, safety-check texts and layer names checked against the code.</td></tr>
+      <tr><td><code>src/components/Shell.tsx</code>, <code>index.html</code>, <code>public/favicon-32.png</code>, <code>public/apple-touch-icon.png</code> (new)</td><td>Original logo and favicon restored.</td></tr>
+      <tr><td><code>src/styles/global.css</code>, <code>tokens.css</code></td><td>Expanded-map styles; animations no longer leave a transform; brand gradient; toolbar layering.</td></tr>
+      <tr><td><code>src/api/hooks.ts</code>, <code>types.ts</code></td><td><code>useConfig</code> added; unused knowledge-search hooks removed.</td></tr>
+      <tr><td>Tests: <code>plain.test.ts</code>, <code>draft.test.ts</code>, <code>components.test.tsx</code>, <code>e2e/journey.spec.ts</code>, <code>e2e/mobile.spec.ts</code></td><td>Two new unit tests (the pixel-size prediction; the server's limits and the weight check); the end-to-end tests now also expand and restore the map; expected texts updated.</td></tr>
+    </tbody>
+  </table>
+  <h2>C.3 Repository and documentation</h2>
+  <table class="compact">
+    <thead><tr><th style="width:36%">File</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td><code>.gitignore</code></td><td><code>data/</code> changed to <code>/data/</code>, so <code>frontend/src/data/explainer-images.json</code> (needed by the build) is no longer ignored.</td></tr>
+      <tr><td><code>README.md</code>, <code>.env.example</code>, <code>docs/api.md</code>, <code>docs/data.md</code>, <code>docs/design.md</code></td><td>Test count, measured run times, <code>/api/config</code>, the configurable area limit, the wording rules.</td></tr>
+      <tr><td><code>docs/deliverables/</code> (new)</td><td>This report, the presentation, the screenshots, and their sources (<code>docs/deliverables/source</code>).</td></tr>
+    </tbody>
+  </table>
+</section>

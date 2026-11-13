@@ -17,6 +17,7 @@ requests are rate-limited per client (`AEGIS_RATE_LIMIT_PER_MINUTE`, HTTP 429 + 
 | GET | `/api/health/ready` | Database, model and job-pool readiness (503 if the DB is down) |
 | GET | `/metrics` | Prometheus metrics (requests, latency, tool calls, guardrails, jobs, external calls) |
 | GET | `/api/me` | Current identity and role |
+| GET | `/api/config` | This server's processing limits (area min/max, default pixel size, pixel budget, largest full-detail area, 120-day window, 60-day gap) and optional features (alert delivery, LLM summary, FIRMS history, auth, offline). Switches only - never URLs or keys. The web UI reads its limits from here |
 | GET | `/api/sources?refresh=` | Data-source catalogue with live health (cached 5 min) |
 | GET | `/api/events/live` | Current GDACS alerts and USGS M5.5+ earthquakes (cached 10 min) |
 | GET | `/api/scenarios` | Curated real and synthetic case studies |

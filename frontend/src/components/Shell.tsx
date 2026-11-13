@@ -1,10 +1,9 @@
-import { BookOpen, ClipboardCheck, House, LayoutGrid, LogIn, ScanSearch, UserCircle2 } from "lucide-react";
+import { BookOpen, ClipboardCheck, House, LayoutGrid, LogIn, Satellite, ScanSearch, UserCircle2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { setToken } from "@/api/client";
 import { useDashboard, useHealth, useMe } from "@/api/hooks";
 import { useScrolled } from "@/lib/hooks";
-import { BrandMark } from "./illustrations";
 import { Modal } from "./ui";
 
 /** Five destinations, named after what people want to do - not after the software's internals. */
@@ -47,7 +46,8 @@ export function Shell({ children }: { children: ReactNode }) {
       <header className={`topbar ${scrolled ? "scrolled" : ""}`}>
         <div className="topbar-inner">
           <Link to="/" className="brand" aria-label="AegisEO home">
-            <BrandMark />
+            {/* the original AegisEO logo (first version of the project): a satellite on the brand gradient, matching public/favicon.svg */}
+            <span className="brand-mark"><Satellite size={21} aria-hidden /></span>
             <span>
               <span className="brand-name">AegisEO</span>
               <span className="brand-sub">Disaster maps from space</span>
@@ -81,8 +81,8 @@ export function Shell({ children }: { children: ReactNode }) {
       <footer className="footer">
         <div className="footer-inner">
           <div style={{ maxWidth: 640 }}>
-            <strong style={{ color: "var(--ink)" }}>AegisEO</strong> helps people see where a flood, wildfire or landslide has hit, using free satellite photos.
-            It is an advisory tool: a person approves every warning before anything is sent.
+            <strong style={{ color: "var(--ink)" }}>AegisEO</strong> helps people see where a flood, wildfire or landslide has hit, using free satellite images.
+            It is an advisory tool: it suggests, and a person decides. A person approves every warning before anything is sent.
           </div>
           <div className="row-wrap" style={{ gap: "8px 18px" }}>
             <Link to="/about">About</Link>

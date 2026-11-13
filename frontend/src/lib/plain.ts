@@ -24,17 +24,24 @@ export function areaPicture(km2: number | null | undefined): string | null {
   return `like a square about ${side < 10 ? side.toFixed(1) : Math.round(side)} km on each side`;
 }
 
-export function areaVerdict(km2: number | null, maxKm2: number, minKm2 = 0.25): { ok: boolean; tone: "ok" | "warn" | "danger"; text: string } {
+/**
+ * Is an area a size the server accepts? maxKm2/minKm2 come from the server (GET /api/config); fullDetailKm2 is the
+ * size above which the server automatically uses larger pixels (rule P0 in backend/aegis/agents/specialists.py).
+ */
+export function areaVerdict(km2: number | null, maxKm2: number, minKm2 = 0.25, fullDetailKm2?: number): { ok: boolean; tone: "ok" | "warn" | "danger"; text: string } {
   if (km2 == null) return { ok: false, tone: "warn", text: "Choose an area first." };
-  if (km2 > maxKm2) return { ok: false, tone: "danger", text: `Too big. The largest area that can be checked is ${fmtInt(maxKm2)} km². Zoom in or draw a smaller box.` };
-  if (km2 < minKm2) return { ok: false, tone: "danger", text: "Too small for the satellite photos to show detail. Zoom out or draw a bigger box." };
-  if (km2 > maxKm2 * 0.5) return { ok: true, tone: "warn", text: "Good, but large. It will take a few minutes longer." };
+  if (km2 > maxKm2) return { ok: false, tone: "danger", text: `Too big. One check can cover at most ${fmtInt(maxKm2)} km². Zoom in, draw a smaller box, or split the region into several checks.` };
+  if (km2 < minKm2) return { ok: false, tone: "danger", text: `Too small. The smallest area is ${minKm2} km² (500 × 500 m), because each image pixel covers 10 to 20 m. Zoom out or draw a bigger box.` };
+  if (fullDetailKm2 != null && km2 > fullDetailKm2) {
+    return { ok: true, tone: "warn", text: `Allowed, but large. Areas above about ${fmtInt(fullDetailKm2)} km² are processed with larger pixels (30 m instead of 20 m), so small details are lost, and the check takes longer.` };
+  }
+  if (km2 > maxKm2 * 0.5) return { ok: true, tone: "warn", text: "Allowed, but large. The first check of a large area takes longer, because more image data has to be downloaded." };
   return { ok: true, tone: "ok", text: "Good size." };
 }
 
 // ----------------------------------------------------------------------------- dates
 export interface Windows { pre: [string, string]; post: [string, string] }
-export const MAX_WINDOW_DAYS = 120; // backend guardrail G03
+export const MAX_WINDOW_DAYS = 120; // backend guardrail G03 (also sent by GET /api/config)
 export const MAX_GAP_DAYS = 60; // backend guardrail G06 (warning)
 
 /** Same defaults as backend/aegis/jobs.py default_windows(). */
@@ -46,7 +53,7 @@ export function defaultWindows(event: string, today: string): Windows {
 const days = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 
 /** Problems that would make the backend reject the request (block) plus soft warnings. */
-export function dateProblems(event: string, w: Windows, today: string): { errors: string[]; warnings: string[] } {
+export function dateProblems(event: string, w: Windows, today: string, maxWindowDays = MAX_WINDOW_DAYS, maxGapDays = MAX_GAP_DAYS): { errors: string[]; warnings: string[] } {
   const errors: string[] = [];
   const warnings: string[] = [];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(event)) return { errors: ["Choose the date when it happened."], warnings };
@@ -56,12 +63,12 @@ export function dateProblems(event: string, w: Windows, today: string): { errors
   if (w.pre[1] > event) errors.push("The 'before' search must end on or before the day it happened.");
   if (w.post[1] < event) errors.push("The 'after' search must end on or after the day it happened.");
   if (w.post[1] > today) errors.push("The 'after' search can't end in the future.");
-  if (days(w.pre[0], w.pre[1]) > MAX_WINDOW_DAYS || days(w.post[0], w.post[1]) > MAX_WINDOW_DAYS)
-    errors.push(`Each search can be at most ${MAX_WINDOW_DAYS} days long.`);
-  if (!errors.length && days(w.pre[1], w.post[0]) > MAX_GAP_DAYS)
-    warnings.push("The 'before' and 'after' searches are more than 60 days apart. Normal seasonal changes (crops, rivers) may then look like damage.");
+  if (days(w.pre[0], w.pre[1]) > maxWindowDays || days(w.post[0], w.post[1]) > maxWindowDays)
+    errors.push(`Each search can be at most ${maxWindowDays} days long.`);
+  if (!errors.length && days(w.pre[1], w.post[0]) > maxGapDays)
+    warnings.push(`The 'before' and 'after' searches are more than ${maxGapDays} days apart. Over that much time, normal seasonal changes (growing crops, rising rivers) can look like flooding or damage.`);
   if (!errors.length && days(event, today) < 3)
-    warnings.push("This was only a few days ago. Satellites pass every few days, so there may not be an 'after' photo yet.");
+    warnings.push("This was less than 3 days ago. The satellites may not have passed over the area since then, so an 'after' image may not exist yet.");
   return { errors, warnings };
 }
 
@@ -69,10 +76,10 @@ export function dateProblems(event: string, w: Windows, today: string): { errors
 /** Plain progress stages, mapped from the orchestrator's stage names (backend/aegis/agents/orchestrator.py). */
 export const RUN_STAGES = [
   { key: "start", title: "Getting ready", text: "Checking your choices and making a plan." },
-  { key: "photos", title: "Finding satellite photos", text: "Searching for radar and camera photos from before and after." },
-  { key: "change", title: "Spotting what changed", text: "Comparing the photos to find what the disaster did." },
-  { key: "people", title: "Checking who and what is there", text: "Looking up people, hospitals, schools and roads in the hit area." },
-  { key: "report", title: "Writing up the results", text: "Ranking where to look first and preparing the report." },
+  { key: "photos", title: "Finding satellite images", text: "Searching the archive for radar and optical images taken before and after the event, and downloading them." },
+  { key: "change", title: "Detecting what changed", text: "Comparing the 'before' and 'after' images to find new water, burned land or possible landslides." },
+  { key: "people", title: "Checking who and what is there", text: "Looking up population estimates, hospitals, schools and roads in and near the area where change was found." },
+  { key: "report", title: "Writing up the results", text: "Ranking where to look first, drafting warnings for review and preparing the report." },
 ] as const;
 
 export function runStageIndex(stage: string | null | undefined, progress: number): number {
@@ -138,8 +145,8 @@ export function headline(a: Pick<AnalysisDetail, "hazard" | "summary" | "results
 
 export function noFindReason(hazard: Hazard): string {
   if (hazard === "flood") return "Either there was no new water, or it had already drained away before the satellite passed over. Flash floods often disappear within a day.";
-  if (hazard === "wildfire") return "Either nothing burned here, or clouds and smoke hid the ground in the photos.";
-  return "Either there were no fresh slides on the hillsides, or clouds hid them. Small slides can be too small for these photos.";
+  if (hazard === "wildfire") return "Either nothing burned here, or clouds and smoke hid the ground in the optical images.";
+  return "Either there were no fresh slides on the hillsides, or clouds hid them. Slides narrower than a few pixels (each pixel is 10 to 20 m) can't be seen in these images.";
 }
 
 /** One line describing an analysis in a list. */
@@ -159,18 +166,19 @@ export interface Reason { icon: "area" | "people" | "place" | "road" | "rule" | 
 export function squareReasons(c: CellProps, hazard: Hazard, cellKm: number | null | undefined): Reason[] {
   const out: Reason[] = [];
   const size = isNum(cellKm) ? `${cellKm % 1 === 0 ? cellKm : cellKm.toFixed(1)} km` : "";
+  const part = `the ${HAZARDS[hazard].areaName} of this square`;
   out.push({ icon: "area", text: `${Math.round(c.affected_fraction * 100)}% of this ${size ? size + " " : ""}square ${looks(hazard)} (${fmtArea(c.affected_km2)}).` });
   if (isNum(c.population_exposed)) {
-    out.push({ icon: "people", text: c.population_exposed > 0 ? `About ${fmtInt(c.population_exposed)} people normally live in the hit part.` : "No one is estimated to live in the hit part." });
+    out.push({ icon: "people", text: c.population_exposed > 0 ? `About ${fmtInt(c.population_exposed)} people normally live in ${part} (an estimate, not people hurt).` : `No one is estimated to live in ${part}.` });
   } else if (isNum(c.built_up_affected_km2)) {
-    out.push({ icon: "people", text: `No population numbers here, so buildings were used instead: ${fmtArea(c.built_up_affected_km2)} of built-up land is in the hit part.` });
+    out.push({ icon: "people", text: `No population numbers here, so built-up land was used instead: ${fmtArea(c.built_up_affected_km2)} of built-up land is in ${part}.` });
   }
   const inside = c.facilities.filter((f) => f.status === "inside");
   const near = c.facilities.filter((f) => f.status === "near");
-  if (inside.length) out.push({ icon: "place", text: `Inside the hit part: ${inside.slice(0, 4).map((f) => `${f.name ?? "unnamed"} (${(FACILITY_LABEL[f.category] ?? f.category).toLowerCase()})`).join(", ")}${inside.length > 4 ? ` and ${inside.length - 4} more` : ""}.` });
+  if (inside.length) out.push({ icon: "place", text: `Inside ${part}: ${inside.slice(0, 4).map((f) => `${f.name ?? "unnamed"} (${(FACILITY_LABEL[f.category] ?? f.category).toLowerCase()})`).join(", ")}${inside.length > 4 ? ` and ${inside.length - 4} more` : ""}.` });
   if (near.length) out.push({ icon: "place", text: `${near.length} important place${near.length === 1 ? "" : "s"} within 500 m: ${near.slice(0, 3).map((f) => f.name ?? (FACILITY_LABEL[f.category] ?? f.category).toLowerCase()).join(", ")}${near.length > 3 ? "…" : ""}.` });
-  if (isNum(c.road_km_affected) && c.road_km_affected > 0) out.push({ icon: "road", text: `${c.road_km_affected < 0.1 ? "A short stretch" : `${c.road_km_affected.toFixed(1)} km`} of road crosses the hit part.` });
-  if (c.floor_rule_applied) out.push({ icon: "rule", text: "Raised to High because a hospital, clinic, emergency station or shelter is inside the hit part." });
+  if (isNum(c.road_km_affected) && c.road_km_affected > 0) out.push({ icon: "road", text: `${c.road_km_affected < 0.1 ? "A short stretch" : `${c.road_km_affected.toFixed(1)} km`} of mapped road crosses ${part}.` });
+  if (c.floor_rule_applied) out.push({ icon: "rule", text: `Raised to High by the life-safety rule: a hospital, clinic, fire or ambulance station, or shelter is inside ${part}.` });
   if (c.missing_factors.length) out.push({ icon: "missing", text: `Some information was missing here, so the score may be too low: ${c.missing_factors.map((m) => m.replace(/_/g, " ")).join(", ")}.` });
   return out;
 }
@@ -181,8 +189,8 @@ export interface CheckStory { title: string; why: string; look?: string; technic
 export function reviewStory(t: Pick<ReviewTask, "kind" | "title" | "reason" | "payload">): CheckStory {
   if (t.kind === "verify_detection") {
     const cell = typeof t.payload?.cell_id === "string" ? t.payload.cell_id : null;
-    return { ...CHECKS.HITL, title: `Check an unsure high-priority square${cell ? ` (${cell})` : ""}`,
-      look: "Open the result, find the square on the map, and compare the 'before' and 'after' photos.", technical: t.reason, code: "HITL" };
+    return { ...CHECKS.HITL, title: `Check a high-priority square with weak evidence${cell ? ` (${cell})` : ""}`,
+      look: "Open the result, find the square on the map, and compare the 'before' and 'after' images.", technical: t.reason, code: "HITL" };
   }
   const code = checkCode(t.title, t.payload);
   const c = code ? CHECKS[code] : undefined;

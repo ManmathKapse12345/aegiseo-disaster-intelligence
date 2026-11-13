@@ -5,8 +5,9 @@ import { api } from "@/api/client";
 import { useCreateAnalysis, useLiveEvents, useScenarios } from "@/api/hooks";
 import type { AnalysisDetail, CreateAnalysis, Hazard } from "@/api/types";
 import { useToast } from "@/components/ui";
-import { fmtDate } from "@/lib/format";
+import { fmtDate, fmtInt } from "@/lib/format";
 import { store, useDocumentTitle } from "@/lib/hooks";
+import { type Limits, useLimits } from "@/lib/limits";
 import { HAZARDS } from "@/lib/meta";
 import { friendlyError } from "@/lib/plain";
 import { DEFAULT_EXPERT, DRAFT_KEY, type Draft, type Source, EVENT_HALF_DEG, areaKm2, displayName, emptyDraft, reducer, stepStatus } from "./draft";
@@ -17,7 +18,7 @@ import { StepWhere } from "./StepWhere";
 const STEPS = [
   { short: "Where", title: "Where should AegisEO look?", sub: "Choose a past disaster, one happening now, or any place on the map." },
   { short: "What", title: "What happened there?", sub: "Choose the kind of disaster. Each one is found in a different way." },
-  { short: "When", title: "When did it happen?", sub: "AegisEO compares photos from just before with photos from just after this date." },
+  { short: "When", title: "When did it happen?", sub: "AegisEO compares satellite images taken just before this date with images taken just after it." },
   { short: "Start", title: "Ready to start", sub: "Check the summary, then press Start. You can still go back and change anything." },
 ] as const;
 
@@ -29,6 +30,7 @@ export function CheckWizard() {
   const create = useCreateAnalysis();
   const toast = useToast();
   const nav = useNavigate();
+  const limits = useLimits();
   const [d, dispatch] = useReducer(reducer, undefined, () => {
     const saved = store.get<Draft>(DRAFT_KEY, "session");
     if (!saved || typeof saved !== "object" || !("windows" in saved)) return emptyDraft();
@@ -114,11 +116,11 @@ export function CheckWizard() {
     });
   }
 
-  const status = stepStatus(d, step);
+  const status = stepStatus(d, step, limits);
   // practice scenes have a fixed disaster type and dates, so those two steps are skipped
   const next = () => go(step === 0 && d.synthetic ? 3 : step + 1, "fwd");
   const back = () => go(step === 3 && d.synthetic ? 0 : Math.max(0, step - 1), "back");
-  const reachable = (i: number) => [0, 1, 2].slice(0, i).every((k) => stepStatus(d, k).ok);
+  const reachable = (i: number) => [0, 1, 2].slice(0, i).every((k) => stepStatus(d, k, limits).ok);
 
   const start = async () => {
     if (!d.hazard) return;
@@ -130,7 +132,8 @@ export function CheckWizard() {
         resolution_m: d.expert.resolution, weights: d.expert.weights,
         detection: {
           min_mapping_unit_ha: d.expert.mmu,
-          ...(d.hazard === "flood" ? { prob_threshold: d.expert.threshold, mc_samples: d.expert.mc } : {}),
+          // at least 2 samples: with 1 the measured uncertainty is always 0 and safety check G13 could never ask a person
+          ...(d.hazard === "flood" ? { prob_threshold: d.expert.threshold, mc_samples: Math.max(2, d.expert.mc) } : {}),
           ...(d.hazard === "wildfire" ? { dnbr_threshold: d.expert.dnbr } : {}),
         },
       } : {}),
@@ -138,7 +141,7 @@ export function CheckWizard() {
     try {
       const a = await create.mutateAsync(body);
       store.remove(DRAFT_KEY, "session");
-      toast("ok", "Started! AegisEO is now looking for satellite photos.");
+      toast("ok", "Started. AegisEO is now searching for satellite images.");
       nav(`/results/${a.id}`);
     } catch (e) {
       toast("error", friendlyError(e));
@@ -177,7 +180,7 @@ export function CheckWizard() {
             )}
           </div>
         </div>
-        <Guide step={step} d={d} onGo={(i) => { if (i < step || reachable(i)) go(i, i < step ? "back" : "fwd"); }} onReset={() => { dispatch({ type: "reset", source: d.source }); go(0, "back"); }} />
+        <Guide step={step} d={d} limits={limits} onGo={(i) => { if (i < step || reachable(i)) go(i, i < step ? "back" : "fwd"); }} onReset={() => { dispatch({ type: "reset", source: d.source }); go(0, "back"); }} />
       </div>
     </div>
   );
@@ -200,31 +203,34 @@ function ProgressSteps({ step, reachable, onGo }: { step: number; reachable: (i:
   );
 }
 
-const GUIDE: { todo: ReactNode; know: ReactNode; next: string }[] = [
-  {
-    todo: <>Pick <strong>one</strong> of the three ways to choose a place. Not sure? Choose <strong>A past disaster</strong> - everything is filled in for you.</>,
-    know: <>Smaller areas are faster. Up to 1,500 km² can be checked - about a square 39 km on each side.</>,
-    next: "You'll choose what kind of disaster to look for.",
-  },
-  {
-    todo: <>Choose <strong>Flood</strong>, <strong>Wildfire</strong> or <strong>Landslide</strong>. Each card says what AegisEO looks for.</>,
-    know: <>If you picked a past disaster or a live alert, the right type is already chosen.</>,
-    next: "You'll check the date it happened.",
-  },
-  {
-    todo: <>Enter the day it happened. The search dates for the photos are filled in for you.</>,
-    know: <>Satellites pass over every few days, and clouds can block the camera ones. Radar sees through clouds.</>,
-    next: "You'll see a summary and start the check.",
-  },
-  {
-    todo: <>Read the summary. If something is wrong, use <strong>Back</strong> or the steps at the top. Then press <strong>Start the check</strong>.</>,
-    know: <>Nothing is sent to anyone automatically. If AegisEO is unsure, it will ask a person to check.</>,
-    next: "You'll watch the progress, then see the results on a map.",
-  },
-];
+function guide(limits: Limits): { todo: ReactNode; know: ReactNode; next: string }[] {
+  return [
+    {
+      todo: <>Pick <strong>one</strong> of the three ways to choose a place. Not sure? Choose <strong>A past disaster</strong> - everything is filled in for you.</>,
+      know: <>Smaller areas are faster. One check can cover up to {fmtInt(limits.maxKm2)} km² (a square about {Math.round(Math.sqrt(limits.maxKm2))} km on each side).
+        The reason for the limit is explained below the map.</>,
+      next: "You'll choose what kind of disaster to look for.",
+    },
+    {
+      todo: <>Choose <strong>Flood</strong>, <strong>Wildfire</strong> or <strong>Landslide</strong>. Each card says what AegisEO looks for.</>,
+      know: <>If you picked a past disaster or a live alert, the right type is already chosen.</>,
+      next: "You'll check the date it happened.",
+    },
+    {
+      todo: <>Enter the day it happened. The date ranges in which AegisEO searches for images are filled in for you.</>,
+      know: <>Each satellite passes over the same place only every few days, so an image does not exist for every date. Clouds hide the ground in optical images; radar images are not affected by clouds.</>,
+      next: "You'll see a summary and start the check.",
+    },
+    {
+      todo: <>Read the summary. If something is wrong, use <strong>Back</strong> or the steps at the top. Then press <strong>Start the check</strong>.</>,
+      know: <>Nothing is sent to anyone automatically. Anything that needs a person's judgement, and every draft warning, waits under To review.</>,
+      next: "You'll watch the progress, then see the results on a map.",
+    },
+  ];
+}
 
-function Guide({ step, d, onGo, onReset }: { step: number; d: Draft; onGo: (i: number) => void; onReset: () => void }) {
-  const g = GUIDE[step];
+function Guide({ step, d, limits, onGo, onReset }: { step: number; d: Draft; limits: Limits; onGo: (i: number) => void; onReset: () => void }) {
+  const g = guide(limits)[step];
   const km2 = areaKm2(d);
   const choices = useMemo(() => [
     { i: 0, label: "Place", value: d.synthetic ? "Practice scene (made-up)" : d.bbox ? `${d.place?.split(",").slice(0, 2).join(",") || "Area on the map"}${km2 != null ? ` · ${km2 < 10 ? km2.toFixed(1) : Math.round(km2)} km²` : ""}` : null },

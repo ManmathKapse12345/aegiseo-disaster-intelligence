@@ -1,12 +1,13 @@
 import { ArrowRight, Check, Globe2, History, MapPinned } from "lucide-react";
 import { lazy, Suspense, type Dispatch } from "react";
 import type { LiveEvent, Scenario } from "@/api/types";
-import { Callout, ErrorState, Loading, PracticeChip } from "@/components/ui";
+import { Callout, Disclosure, ErrorState, Loading, PracticeChip } from "@/components/ui";
 import { EVENT_NAME, HAZARD_COLOR } from "@/lib/events";
-import { fmtDate, timeAgo } from "@/lib/format";
+import { fmtDate, fmtInt, timeAgo } from "@/lib/format";
+import { type Limits, useLimits } from "@/lib/limits";
 import { HAZARDS } from "@/lib/meta";
 import { areaPicture } from "@/lib/plain";
-import { type Action, type Draft, MAX_KM2, SUPPORTED_EVENT, areaKm2 } from "./draft";
+import { type Action, type Draft, SUPPORTED_EVENT, areaKm2 } from "./draft";
 
 const AoiPicker = lazy(() => import("@/components/map/AoiPicker").then((m) => ({ default: m.AoiPicker })));
 const EventsMap = lazy(() => import("@/components/map/EventsMap").then((m) => ({ default: m.EventsMap })));
@@ -44,6 +45,7 @@ export function StepWhere({ d, dispatch, scenarios, events, onContinue, canConti
   ] as const;
   const chosen = d.scenarioId ? (scenarios.data ?? []).find((s) => s.id === d.scenarioId) : null;
   const km2 = areaKm2(d);
+  const limits = useLimits();
 
   return (
     <div>
@@ -113,16 +115,17 @@ export function StepWhere({ d, dispatch, scenarios, events, onContinue, canConti
       )}
 
       {d.source === "live" && (
-        <LiveTab d={d} dispatch={dispatch} events={events} onContinue={onContinue} canContinue={canContinue} />
+        <LiveTab d={d} dispatch={dispatch} events={events} onContinue={onContinue} canContinue={canContinue} limits={limits} />
       )}
 
       {d.source === "map" && (
         <div className="fade-in" role="tabpanel" aria-label="Anywhere on the map">
           <p className="small ink-2" style={{ margin: "0 0 14px" }}>
             Search for a place (or move the map yourself), zoom until the <strong>white frame</strong> covers your area, then press <strong>Use this area</strong>.
+            To see more of the map, press <strong>Expand map</strong>.
           </p>
           <Suspense fallback={mapFallback}>
-            <AoiPicker value={d.synthetic ? null : d.bbox} maxKm2={MAX_KM2} height="min(62vh, 560px)"
+            <AoiPicker value={d.synthetic ? null : d.bbox} maxKm2={limits.maxKm2} minKm2={limits.minKm2} fullDetailKm2={limits.fullDetailKm2} height="min(62vh, 560px)"
               onChange={(b, label) => dispatch({ type: "area", bbox: b, place: label ?? null })} />
           </Suspense>
           {!d.synthetic && d.bbox && canContinue && (
@@ -137,11 +140,44 @@ export function StepWhere({ d, dispatch, scenarios, events, onContinue, canConti
       {!d.synthetic && d.bbox && km2 != null && d.source !== "map" && d.source !== "past" && (
         <p className="caption muted" style={{ marginTop: 12 }}>Area: {km2 < 10 ? km2.toFixed(1) : Math.round(km2)} km², {areaPicture(km2)}.</p>
       )}
+      {(d.source === "map" || d.source === "live") && <SizeLimitExplained limits={limits} />}
     </div>
   );
 }
 
-function LiveTab({ d, dispatch, events, onContinue, canContinue }: Pick<Props, "d" | "dispatch" | "events" | "onContinue" | "canContinue">) {
+/** Why one check is limited in size - every statement mirrors the backend code named in the comments. */
+function SizeLimitExplained({ limits }: { limits: Limits }) {
+  return (
+    <div style={{ marginTop: 20 }}>
+      <Disclosure summary={`Why can one check cover at most ${fmtInt(limits.maxKm2)} km²?`}>
+        <div className="small ink-2 prose">
+          <p>
+            This limit is a setting of this AegisEO server (it decides how much work one check may do on one computer). It is not a limit of the satellites or
+            of the image archive. A larger area makes a check slower and less detailed, for four reasons:
+          </p>
+          <ol>
+            <li><strong>More data to download.</strong> AegisEO downloads every image for the whole area: radar and optical, before and after, plus maps of
+              height, permanent water and land cover. Downloading already takes most of the time of a first check, and at the same pixel size a larger area
+              means more data.</li>
+            {/* backend/aegis/geo/grid.py Grid.for_aoi + AEGIS_MAX_GRID_PIXELS */}
+            <li><strong>Less detail.</strong> Each image layer may have at most {(limits.maxGridPixels / 1e6).toLocaleString("en", { maximumFractionDigits: 1 })} million pixels, so that memory use stays bounded.
+              Areas above about {fmtInt(limits.fullDetailKm2)} km² are therefore processed with 30 m pixels instead of 20 m, and narrow features are lost.</li>
+            {/* backend/aegis/analysis/prioritize.py max_cells = 900 */}
+            <li><strong>Larger priority squares.</strong> At most 900 squares are ranked, so above 900 km² each square grows from 1 km to 1.5 km across and
+              describes a bigger area.</li>
+            {/* backend/aegis/sources/osm.py build_query: [timeout:90][maxsize:128 MiB] */}
+            <li><strong>Map data can fail.</strong> Hospitals, schools and roads come from free public OpenStreetMap servers, which stop a request after
+              90 seconds or 128 MB of data. If that happens, the check continues without that information and says so.</li>
+          </ol>
+          <p>To cover a bigger region, split it into several checks of up to {fmtInt(limits.maxKm2)} km² each. An administrator can change the limit with the
+            server setting <code>AEGIS_MAX_AOI_KM2</code>; the effects above then grow with the area.</p>
+        </div>
+      </Disclosure>
+    </div>
+  );
+}
+
+function LiveTab({ d, dispatch, events, onContinue, canContinue, limits }: Pick<Props, "d" | "dispatch" | "events" | "onContinue" | "canContinue"> & { limits: Limits }) {
   const list = (events.data?.events ?? []).slice().sort((a, b) =>
     (SUPPORTED_EVENT[a.hazard] ? 0 : 1) - (SUPPORTED_EVENT[b.hazard] ? 0 : 1)
     || (LEVEL_ORDER[a.alert_level ?? ""] ?? 3) - (LEVEL_ORDER[b.alert_level ?? ""] ?? 3));
@@ -166,7 +202,7 @@ function LiveTab({ d, dispatch, events, onContinue, canContinue }: Pick<Props, "
                 <span className="chip-dot" style={{ width: 12, height: 12, background: color }} aria-hidden />
                 <span style={{ minWidth: 0 }}>
                   <strong style={{ display: "block", fontSize: "var(--fs-sm)" }}>{e.name}</strong>
-                  <span className="caption muted">{EVENT_NAME[e.hazard] ?? e.hazard} · since {fmtDate(e.from || e.time)}{ok ? "" : " · can't be mapped from these photos"}</span>
+                  <span className="caption muted">{EVENT_NAME[e.hazard] ?? e.hazard} · since {fmtDate(e.from || e.time)}{ok ? "" : " · can't be mapped from these images"}</span>
                 </span>
                 {e.alert_level && <span className={`chip ${e.alert_level === "Red" ? "danger" : e.alert_level === "Orange" ? "warn" : "ok"}`}>{e.alert_level}</span>}
               </button>
@@ -178,12 +214,13 @@ function LiveTab({ d, dispatch, events, onContinue, canContinue }: Pick<Props, "
       {selected && (
         <div style={{ marginTop: 24 }} className="fade-in">
           <Callout tone="info" title={`Chosen: ${selected.name}`}>
-            Alerts only give one point on the map, so AegisEO drew a square of about 18 × 18 km around it. If the damage is somewhere else nearby, press
-            <strong> Change area</strong> on the map below and move the frame there.
+            An alert gives only one point on the map, so AegisEO drew a box around that point (shown on the map below; its size is written under the map).
+            If the flooding or fire is somewhere else nearby, press <strong>Change area</strong> on the map and move the frame there.
           </Callout>
           <div style={{ marginTop: 16 }}>
             <Suspense fallback={mapFallback}>
-              <AoiPicker value={d.bbox} maxKm2={MAX_KM2} height={420} onChange={(b, label) => dispatch({ type: "area", bbox: b, place: label ?? undefined, keepSource: true })} />
+              <AoiPicker value={d.bbox} maxKm2={limits.maxKm2} minKm2={limits.minKm2} fullDetailKm2={limits.fullDetailKm2} height={420}
+                onChange={(b, label) => dispatch({ type: "area", bbox: b, place: label ?? undefined, keepSource: true })} />
             </Suspense>
           </div>
           {canContinue && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={onContinue}>Continue with this alert <ArrowRight size={16} className="arrow" aria-hidden /></button>}

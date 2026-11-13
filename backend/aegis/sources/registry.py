@@ -154,17 +154,14 @@ def _check(kind: str, settings: Settings, services: Any) -> dict[str, Any]:
 
             with rasterio.Env(**GDAL_ENV), rasterio.open(HRSL_URL):
                 r = {"status": "operational"}
-        elif kind in ("gdacs", "usgs", "open_meteo"):
+        elif kind in ("gdacs", "usgs", "open_meteo", "firms"):
             r = services.feeds.health(kind)
         elif kind == "nominatim":
             from aegis.sources.places import get_place_search
 
             r = get_place_search().health()
-        elif kind == "firms":
-            key = bool(settings.firms_map_key.get_secret_value())
-            r = {"status": "operational" if not settings.offline else "unavailable",
-                 "detail": "MAP_KEY configured (historical queries enabled)" if key else "public 7-day files only; set AEGIS_FIRMS_MAP_KEY for history"}
         elif kind == "llm":
+            # configuration check only: no API call is made, so "operational" means "a key is set", not "reachable"
             r = {"status": "operational" if settings.llm_available else "not_configured",
                  "detail": f"model {settings.llm_model}" if settings.llm_available else "template summaries in use"}
         else:

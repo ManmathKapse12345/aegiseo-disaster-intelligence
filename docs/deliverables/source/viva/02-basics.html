@@ -1,0 +1,100 @@
+<section class="chapter">
+  <div class="keep"><h1><span class="num">Part 1</span>The project in brief</h1>
+
+  <h2>Purpose and users</h2>
+  <div class="qa">
+    <div class="q"><span class="n">1</span><span>What is AegisEO, in one or two sentences? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>AegisEO is a web application that compares free satellite images taken before and after a flood, wildfire or landslide, maps what changed, estimates the people, important facilities and roads in the changed area, and ranks small squares of the area by how urgently they should be checked. A person makes every consequential decision: doubtful results wait for a person, and draft warnings are never sent without a named person's approval.</p></div>
+    <div class="fu"><b>Follow-up:</b> Is it an "AI system"? <i>Partly. The flood detector is a trained neural network. The agent that runs a check makes its choices with written rules, not with a language model, so its decisions are repeatable. A language model (Claude) is optional and may only reword the summary; every number it writes is checked against the evidence.</i></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">2</span><span>What problem does it solve, and why is that problem hard? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>After a disaster, responders need three answers quickly: where did the land change, who and what is there, and where should we look first. It is hard for three reasons. Clouds hide the ground from optical satellites, and floods happen in bad weather. Radar satellites see through clouds, but their images are noisy and easy to misread. And a map of water is not yet a decision: it must be combined with population and facilities, ranked, and accompanied by a measure of how far it can be trusted. Specialists can do this by hand, but it takes hours or days. (Doc 1.1)</p></div>
+    <div class="fu"><b>Follow-up:</b> Why not just look at the images? <i>A region can be hundreds of square kilometres, radar images need training to read, and a ranking must be consistent and explainable. AegisEO still shows the real images (including a before/after slider), so a person can always check its result by eye.</i></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">3</span><span>Who is AegisEO for, and who is it not for? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>It is for analysts and coordinators in disaster-management agencies and humanitarian organisations who need a first, explained overview, and for students and researchers. The guided wizard and plain wording make it usable without remote-sensing training. It is not for issuing public warnings directly, not for estimating deaths or building damage, and not for situations that need images within hours, because it depends on when satellites pass. (Doc Chapter 2)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">4</span><span>What does one check produce? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>A map of the detected change with layers for probability and uncertainty; key numbers (changed area, people potentially exposed, facilities inside or near, kilometres of road); priority squares, each with a score, a category, written reasons and a confidence level; the results of the safety checks; draft warnings waiting for approval; downloadable PDF, CSV, GeoJSON and GeoTIFF files; and a full step-by-step record of every decision and tool call.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">5</span><span>Which disasters can it check, and why not earthquakes? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>Floods (the main method, with a trained and evaluated neural network), wildfire burn scars (a standard burn index), and possible landslide scars (a screening method whose results always go to a person). Earthquake and storm-wind damage to buildings is mostly too small to see in pixels of 10 to 20 m, so earthquakes are shown only as context from the USGS feed.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">6</span><span>What does "human-in-the-loop" mean in AegisEO, concretely? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p><dfn>Human-in-the-loop</dfn> means the software prepares and a person decides. In AegisEO: 18 automatic safety checks send doubtful results to a person as <i>findings</i>; every warning the system drafts waits for a named person to approve or reject it; a person can change a square's priority with a reason; every decision is saved with the person's name; and later checks of the same area show earlier corrections. (Doc Chapter 6)</p></div>
+    <div class="fu"><b>Follow-up:</b> What happens if nobody reviews? <i>Nothing is sent and nothing changes. The check keeps the status "needs review", the draft warnings stay "pending review", and the result page says so.</i></div>
+  </div>
+
+  <h2>Key ideas and honesty</h2>
+  <div class="qa">
+    <div class="q"><span class="n">7</span><span>What does "people potentially exposed" mean, and why not say "affected"? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>It is the estimated number of people who live in the pixels detected as changed, taken from population maps. It says where people live, not whether they were harmed, were at home, or have left. Saying "affected" or "casualties" would claim more than the data show, so the wording is fixed in the interface and safety check G17 blocks casualty language in generated text.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">8</span><span>What is a priority square? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>The checked area is divided into squares (0.5 km for areas below 50 km², usually 1 km, and larger for very big areas so that there are at most 900). Each square gets a score from 0 to 100 that combines how much changed there with who and what is there, a category (Critical from 70, High from 50, Moderate from 30, otherwise Low), the reasons written out, and a separate confidence level. (Doc 5.5)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">9</span><span>What is the difference between a practice run and a real check? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>A real check uses real Sentinel images from the public archive. A practice run uses a scene that the program generates itself, with a known correct answer, placed at an invented location near 0° N, 0° E; it runs without internet in under a minute. Everything from a practice run is labelled "Practice data" in violet, its warning titles start with "[SIMULATED]", and safety check G18 makes it impossible to publish them.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">10</span><span>Which data in AegisEO are real, and which are not? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>Real observations: the Sentinel-1 and Sentinel-2 images, live alerts from GDACS and USGS, NASA FIRMS fire detections, rainfall, and OpenStreetMap features. Real but fixed estimates: the population maps (2015-2020), terrain height, long-term water occurrence and land cover. Derived by AegisEO: probabilities, detected areas, scores and texts. Simulated: practice runs and the benchmark scenes. Fixed files: the model's accuracy results and the case-study descriptions. If a source fails during a real check, its factor is marked missing; nothing is invented. (Doc 12.3)</p></div>
+  </div>
+</section>
+
+<section class="chapter flow">
+  <div class="keep"><h1><span class="num">Part 2</span>Satellite images: the foundations</h1>
+
+  <h2>Sensors and images</h2>
+  <div class="qa">
+    <div class="q"><span class="n">11</span><span>What is the difference between an optical and a radar satellite image? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>An <dfn>optical</dfn> image (Sentinel-2) records sunlight reflected by the ground in 13 spectral bands, from visible light to shortwave infrared, with pixels of 10 to 60 m; it needs daylight and a clear sky. A <dfn>radar</dfn> image (Sentinel-1, a <i>synthetic aperture radar</i> or SAR) is made by the satellite sending its own microwave pulses, about 5.5 cm long, and measuring the echo, called <dfn>backscatter</dfn>. Microwaves pass through clouds, so radar works in any weather, day and night. AegisEO uses six optical bands (blue, green, red, near infrared and two shortwave infrared) and both radar polarisations.</p></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">12</span><span>Why does calm water look dark in a radar image? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>The radar looks sideways at the ground. A smooth water surface reflects the pulse away from the satellite, like a mirror, so almost no echo returns and the pixel is dark. Rougher land scatters part of the pulse back and looks brighter. That contrast is why radar maps floods well, with known exceptions: wind can roughen water, and water between buildings or under trees can make the echo stronger instead of weaker.</p></div>
+    <div class="fu"><b>Follow-up:</b> What are VV and VH? <i>They are polarisations: the radar sends a vertically oriented wave and records the vertically (VV) or horizontally (VH) oriented part of the echo. VV responds strongly to smooth surfaces such as water; VH responds more to vegetation. The model receives VV, VH and their difference, all in decibels (dB, a logarithmic scale).</i></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">13</span><span>What is a revisit interval, and what are the values for the Sentinel satellites? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>A satellite travels on a fixed path and passes over the same place again only after a set number of days, its <dfn>revisit interval</dfn>. Sentinel-1 usually images a place every 6 to 12 days, depending on the year and region. Sentinel-2 passes about every 5 days, but an image is only useful where clouds do not hide the ground. This is why the first "after" image can come days after an event. (Doc 7.2)</p></div>
+    <div class="fu"><b>Follow-up:</b> Does a longer "after" search period give a better image? <i>Not necessarily. AegisEO always uses the earliest radar pass in the period, so a longer period only helps when there was no pass at all. A later image may even show less, because floodwater drains.</i></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">14</span><span>What is a spectral index? Explain NDVI, MNDWI and dNBR. <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>A <dfn>spectral index</dfn> combines two bands into one number per pixel that highlights one kind of surface. <b>NDVI</b> = (near infrared − red) / (near infrared + red) is high for healthy vegetation. <b>MNDWI</b> = (green − shortwave infrared) / (green + shortwave infrared) is positive over water. <b>NBR</b> = (near infrared − shortwave infrared 2) / (near infrared + shortwave infrared 2) drops when vegetation burns, and <b>dNBR</b> = NBR before − NBR after measures burn severity. AegisEO uses dNBR for wildfires, NDVI loss for landslides, and MNDWI as an independent cross-check of the flood model.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">15</span><span>What is resolution, and why does AegisEO analyse at 20 m by default? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Resolution here means the size of one pixel on the ground. Sentinel-2's visible and near-infrared bands are 10 m, its shortwave-infrared bands 20 m, and Sentinel-1's products have 10 m pixels but a real sharpness of about 20 m. A 20 m grid matches the real detail of most inputs and needs a quarter of the pixels of a 10 m grid, so checks are faster. Users can choose 10 to 60 m in the settings. (Doc 8.2)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">16</span><span>Why compare a "before" and an "after" image instead of just mapping water after the event? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>An "after" image shows all water, including rivers, lakes and fish ponds that are always there. Comparing with a "before" image separates new water from existing water; this is <dfn>change detection</dfn>. AegisEO also removes places where the JRC long-term water record says water is present at least 80% of the time. If no "before" image exists, it uses that record as the estimate of earlier water and says so in the result.</p></div>
+  </div>
+
+  <h2>Products and context data</h2>
+  <div class="qa">
+    <div class="q"><span class="n">17</span><span>Which satellite products does AegisEO use, and how are they prepared? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Sentinel-1 <b>RTC</b> (radiometrically terrain-corrected backscatter, which removes the brightening and darkening caused by slopes) and Sentinel-2 <b>L2A</b> (surface reflectance corrected for the atmosphere, with a scene-classification layer that marks cloud, cloud shadow and missing data). Both come from Microsoft's Planetary Computer. AegisEO reads only the part covering the area, resamples it to a common grid, converts radar values to dB, applies the reflectance offset of newer Sentinel-2 processing versions, removes duplicate reprocessed scenes and masks clouds and shadows. (Doc 12.2)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">18</span><span>Which other datasets are used, and for what? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>The Copernicus 30 m elevation model (for slope and height above drainage), the JRC Global Surface Water occurrence (permanent water), ESA WorldCover 2021 (land cover), population grids (Meta/CIESIN HRSL at about 30 m, WorldPop totals), OpenStreetMap (hospitals, schools, emergency services, shelters, utilities, settlements, roads), Open-Meteo rainfall, NASA FIRMS fire detections, and GDACS and USGS alerts.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">19</span><span>What is "height above drainage", and why is water removed where it is more than 15 m? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p><dfn>Height above nearest drainage (HAND)</dfn> is how far a pixel lies above the nearest stream or low channel. Floodwater collects low down, whereas hillsides facing away from the radar appear dark ("radar shadow") and can be mistaken for water. Pixels more than 15 m above drainage or on slopes steeper than 8° are therefore removed. Safety check G14 adds a note when more than 30% of the candidate pixels were removed this way, because the terrain rule itself might then be hiding real water.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">20</span><span>How does AegisEO find and download images? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>It searches the Planetary Computer catalogue, which follows the <dfn>STAC</dfn> standard (SpatioTemporal Asset Catalog: a common format for describing satellite images by place and time). Each image is stored as a cloud-optimised GeoTIFF, a file organised so that a program can request only the bytes covering a small window. AegisEO obtains a free, temporary access token, reads just the window of the chosen area, and saves it locally, so a repeat of the same check takes seconds. No account or key is needed.</p></div>
+  </div>
+</section>

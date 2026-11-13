@@ -1,0 +1,97 @@
+<section class="chapter flow">
+  <div class="keep"><h1><span class="num">Part 4</span>The flood model</h1>
+
+  <h2>Design</h2>
+  <div class="qa">
+    <div class="q"><span class="n">31</span><span>What kind of model detects floods, and what is a U-Net? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>A <dfn>neural network</dfn> is a function with many adjustable numbers (parameters) that are tuned on examples until its outputs match the expected answers. A <dfn>U-Net</dfn> is a network for labelling every pixel of an image: an <i>encoder</i> shrinks the image step by step into more abstract features, a <i>decoder</i> enlarges them back to full size, and "skip connections" pass fine detail from each encoder level to the decoder so edges stay sharp. AegisEO's model has four levels (16, 32, 64 and 128 feature channels) and outputs, for every pixel, the probability that it is water. (Doc 3.10, 13.2)</p></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">32</span><span>Why two encoders and a gate, instead of stacking all bands as one input? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Stacking all radar and optical bands as one input (<dfn>early fusion</dfn>) forces the network to treat cloud-covered optical values like any other input. AegisEO's gated-fusion model has a separate encoder for radar (VV, VH, their difference and a validity mask) and for optical (six bands and a validity mask), and at each of the four levels a small learned <dfn>gate</dfn> decides, pixel by pixel, how much to rely on radar. The result shows in the evaluation: at 50% cloud the deployed model keeps an IoU of 0.739, against 0.691 for early fusion, and the finest gate is shown to users as the "Radar or optical?" layer.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">33</span><span>How do you guarantee that the model does not use cloudy optical pixels? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>By a hard rule inside the gate formula rather than by training alone: <code>g_eff = v_sar * (g * v_opt + (1 - v_opt))</code>, where <code>v_sar</code> and <code>v_opt</code> are 1 where the sensor has a valid observation and 0 under cloud or outside the image. Where the optical value is invalid, <code>g_eff</code> equals 1 (radar only); where radar is invalid, it equals 0 (optical only). The learned gate <code>g</code> only matters where both are valid. A unit test (<code>test_gated_fusion_hard_constraints</code>) checks exactly this. (Doc 13.2)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">34</span><span>What is "sensor dropout", and why did you train with it? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>During training, inputs were deliberately damaged so the model would learn to cope with missing sensors: in 30% of the training examples the optical input was removed completely, in 10% the radar input, and in 60% simulated clouds covered up to 100% of the optical image. Without this, a model learns to lean on the clearer optical bands and fails when they are missing. Version 2 of the model, trained this way, is the deployed one. (Doc 13.2)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">35</span><span>What data was the model trained and tested on? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p><dfn>Sen1Floods11</dfn>: 446 image chips of 512 × 512 pixels at 10 m from 11 flood events (Bolivia, Ghana, India, the Mekong basin, Nigeria, Pakistan, Paraguay, Somalia, Spain, Sri Lanka, USA), each with matching Sentinel-1 and Sentinel-2 images and a water map drawn by experts. The standard split was used: 252 chips for training, 89 for validation (choosing the model), 90 for the final test, and the 15 Bolivia chips, an event never seen in training, as a second test of generalisation. Training used a combined pixel-wise cross-entropy and Dice loss, 40 epochs, and kept the version from epoch 30, the best on validation.</p></div>
+    <div class="fu"><b>Follow-up:</b> 252 chips is small. Is that enough? <i>For a model of 1.19 million parameters with heavy augmentation (random crops, flips and rotations, simulated cloud, sensor dropout), it was enough to reach 0.844 IoU on unseen chips. But 10 training events cannot represent every landscape, which is why safety check G11 flags inputs that look unlike the training data.</i></div>
+  </div>
+
+  <h2>Evaluation</h2>
+  <div class="qa">
+    <div class="q"><span class="n">36</span><span>What is IoU, and what did the model achieve? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p><dfn>IoU (intersection over union)</dfn> is the area marked as water by both the model and the experts, divided by the area marked by either; 1.0 means perfect agreement. On the 90 test chips the deployed model reaches 0.844, with <dfn>precision</dfn> 0.932 (93% of the pixels it marks are really water), <dfn>recall</dfn> 0.899 (it finds 90% of the real water) and F1 0.915. On the unseen Bolivia event it reaches 0.828. (Doc 14.3)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">37</span><span>Why did you evaluate under four conditions? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Because in real disasters the inputs are often incomplete. The conditions are: images as they are; simulated 50% cloud on the optical image; no optical image at all; and no radar image at all. The deployed model scores 0.844, 0.739, 0.653 and 0.836 on the test split. The important comparison is under cloud: the optical-only model falls to 0.419 at 50% cloud, while the fusion model keeps 0.739.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">38</span><span>The deployed system is called a "hybrid". What does that mean, and how was it chosen? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Where only radar observed a pixel (for example under thick cloud), the output of a separate radar-only U-Net, the "specialist", is blended in, with a smooth transition at cloud edges so no seams appear. The evaluation script compared all models and combinations by their average IoU over the four conditions on the <b>validation</b> split and selected this hybrid (0.7566, the best). Choosing on validation data matters: if the choice had been made on the test split, the test results would be optimistically biased. (Doc 13.2)</p></div>
+    <div class="fu"><b>Follow-up:</b> Does the hybrid change the result when optical data are present? <i>Almost not: on the test split "as is" the hybrid and the fusion model alone both score 0.844. The difference appears without optical data: 0.653 against 0.612 on the test split, and 0.520 against 0.329 on Bolivia.</i></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">39</span><span>What is calibration, and what is temperature scaling? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>A model is <dfn>calibrated</dfn> when its probabilities mean what they say: of all pixels given 0.7, about 70% are really water. The <dfn>expected calibration error (ECE)</dfn> measures the average gap. Neural networks are often overconfident; <dfn>temperature scaling</dfn> divides the network's raw output by one number T, learned on validation data (here T = 1.66), before converting it to a probability. It reduced the fusion model's ECE from 0.014 to 0.005; the deployed hybrid has 0.006.</p></div>
+    <div class="fu"><b>Follow-up:</b> Does temperature scaling change the flood map? <i>Not at the default threshold. The probability is sigmoid(z / T), and sigmoid(z / T) ≥ 0.5 exactly when z ≥ 0, for any positive T. The map at 0.5 is unchanged; what changes is the probability values, and therefore the uncertainty, the confidence levels and the results at other thresholds.</i></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">40</span><span>How is uncertainty computed, and is it reproducible? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>With <dfn>Monte-Carlo dropout</dfn>: the final layer is evaluated several times (6 by default for the "after" image, 3 for the "before" image), each time with a different random 20% of its input channels switched off. The mean of the passes is the probability and their spread (standard deviation) is the uncertainty: where small changes in the network give different answers, the model is unsure. The random choices come from a generator seeded per image tile, so the same input always gives the same output. (Doc 13.3)</p></div>
+    <div class="fu"><b>Follow-up:</b> How do you know the uncertainty means anything? <i>On the test split, the uncertainty predicts whether a pixel is wrong with an AUROC of 0.885 (0.5 would be chance). Leaving out the 10% most uncertain pixels raises accuracy from 97.5% to 99.4%.</i></div>
+  </div>
+
+  <h2>From probability to flood map</h2>
+  <div class="qa">
+    <div class="q"><span class="n">41</span><span>How is "new flood water" computed from the two images? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>The model gives P(water after) and P(water before) for each pixel, and P(new water) = P(after) × (1 − P(before)): water now and not water before. Pixels where the long-term record shows water at least 80% of the time are set to 0, pixels more than 15 m above drainage or on slopes over 8° are removed, a pixel is marked if P(new water) ≥ 0.5, and groups smaller than 0.5 ha are dropped. The uncertainty combines both predictions' uncertainties. (Doc 13.4)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">42</span><span>What is the cross-check, and what is it used for? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>An independent, simple method is applied to the same pixels: a radar drop of 3 dB or more between the two images, or the optical water index MNDWI turning positive. The share of detected pixels that this method agrees with is the "method agreement". It is not used to change the map; it feeds safety check G13, which asks a person to look when the agreement is below 55% (where enough pixels can be compared) or the mean uncertainty is above 0.15.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">43</span><span>Which baselines did you compare against, and why do they matter? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Classical methods that need no training: Otsu thresholding of radar VV (0.431 IoU on the test split) and VH (0.392), which picks a darkness threshold per scene, and MNDWI &gt; 0 on optical images (0.653, but 0.378 at 50% cloud), plus single-sensor U-Nets and early fusion. Baselines show that the learned fusion model's gain is real and not just a property of the data set.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">44</span><span>Why is the score without optical images so much lower on Bolivia (0.520) than on the test split (0.653)? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Bolivia is a landscape the network never saw in training, and radar backscatter there differs from the training events. A learned radar-only model is sensitive to such differences; on Bolivia even the simple per-scene Otsu threshold on VH does better (0.645), because it adapts to each scene. This is a known limitation (also in <code>docs/model_card.md</code>) and the reason why AegisEO lowers its confidence when it relies on radar alone and checks the input distribution with G11.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">45</span><span>What happens if the trained model cannot be loaded? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>AegisEO falls back to classical methods (radar thresholding and MNDWI) so that a result still appears, and safety check G10 asks a person to review it, because the fallback is less accurate. Benchmark scenario A12 tests this path: the check ends as "needs review" with an IoU of 0.879 on its practice scene.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">46</span><span>What are the main limitations of the flood method? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>It sees only water that is present when a satellite passes, so fast-draining flash floods can be missed (the Derna case study found almost nothing). Water between tall buildings and under dense trees is hard to see with side-looking radar and 10-20 m pixels. It does not estimate depth. And unusual landscapes, unlike the 10 training events, give less reliable results, which G11 flags.</p></div>
+  </div>
+</section>
+
+<section class="chapter flow">
+  <div class="keep"><h1><span class="num">Part 5</span>Wildfires and landslides</h1>
+  <div class="qa">
+    <div class="q"><span class="n">47</span><span>How does AegisEO detect burned areas? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>It computes dNBR from the clearest optical images before and after the fire, and marks a pixel as burned where dNBR is at least 0.10 (the start of "low" severity on the USGS scale) on land that was vegetated before (NDVI above 0.15), excluding water. Severity classes follow the USGS ranges. If no usable optical image exists, it approximates burned vegetation with a drop of at least 2 dB in radar VH, and says so in the method text. NASA FIRMS fire detections within 750 m of the mapped burn are reported as corroboration. (Doc 5.2)</p></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">48</span><span>How are landslides detected, and why does every landslide result need a person? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>It is a screening method: on slopes of at least 10°, a score combines vegetation loss (NDVI falling by at least 0.15, weight 0.65) and radar change (VV changing by at least 2.5 dB, weight 0.35). With optical images, an area becomes a candidate at a score of 0.6, so vegetation loss must be present; without them, the radar change alone can mark a candidate, but its confidence is reduced much more. Many other things look similar from space (harvests, construction, river erosion), and landslide scars are often small, so safety check G15 always asks a person to verify. (Doc 5.3)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">49</span><span>Why were the wildfire and landslide methods not evaluated like the flood model? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Because no expert-labelled data set for them was prepared in this project; they use established index rules from the literature (the USGS dNBR classes) rather than trained models. They were checked on real case studies (the Palisades Fire and the Wayanad landslides) and on practice scenes in the benchmark (A09 IoU 0.699, A10 IoU 0.496), but these are not accuracy measurements against expert maps. Evaluating them against public burn-severity maps and landslide inventories is listed as future work. (Doc 16.2)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">50</span><span>What did the Palisades Fire case show? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>A clear burn scar of 53.9 km² with 14,407 people potentially exposed and two Critical squares. Safety check G12 asked for a review because 63% of the checked area was marked as burned, above its 60% plausibility limit. Here the limit was cautious rather than wrong: the case-study area was drawn tightly around the burn scar. The check is designed to fail on the safe side, and a person confirms in seconds.</p></div>
+  </div>
+</section>

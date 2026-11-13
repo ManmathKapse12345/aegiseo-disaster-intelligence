@@ -1,0 +1,119 @@
+<section class="chapter flow">
+  <div class="keep"><h1><span class="num">Part 6</span>Exposure and ranking</h1>
+
+  <h2>Who and what is there</h2>
+  <div class="qa">
+    <div class="q"><span class="n">51</span><span>How does AegisEO estimate the number of people in the changed area? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>From the Meta/CIESIN High Resolution Settlement Layer (HRSL), a population map with cells of about 30 m. Its counts are converted to density, averaged onto the analysis grid and converted back to counts, so the total is preserved; the sum over the detected pixels is the number potentially exposed. WorldPop's total for the whole area is shown beside it as an independent estimate. Where HRSL has no data, WorldPop's total is spread over built-up land from ESA WorldCover and the result is labelled approximate. (Doc 5.4)</p></div>
+    <div class="fu"><b>Follow-up:</b> How different can those estimates be? <i>Very different. Testing offline mode in this round showed it: when the fallback was used by mistake for Sindh, it gave 42,776 people instead of 7,248 from HRSL. The bug was fixed (the cached HRSL layer is now used), and the case shows why AegisEO always names its population source.</i></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">52</span><span>How are hospitals, schools and roads found? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>One query to OpenStreetMap through the Overpass service (three public servers are tried in turn) returns hospitals, clinics, fire and ambulance stations, police, shelters, schools and colleges, power and water works, named settlements and main roads in the area. Each place is labelled "inside" the detected area, "near" (within 500 m) or outside, and road length is measured per square. Categorisation is deliberately strict, for example a bus shelter is not counted as an emergency shelter. Missing OpenStreetMap entries are a limitation: "no hospital found" does not mean there is none.</p></div>
+  </div>
+
+  <h2>The priority score</h2>
+  <div class="qa">
+    <div class="q"><span class="n">53</span><span>How is a square's priority score computed? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Score = 100 × H<sup>a</sup> × E<sup>1−a</sup>. H, the hazard part, is a weighted average of the changed share of the square (counted fully from half the square) and the strength of the change (average probability, or burn severity for fires). E, the exposure part, is a weighted average of people (on a logarithmic scale up to 5,000 per km²), important places (each with a weight, half for places only nearby) and main roads. The exponent a balances the two and is 0.5 by default. Factors without data are left out of E rather than counted as zero, and the square's reasons say which are missing. (Doc 5.5)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">54</span><span>Why multiply hazard and exposure instead of adding them? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Because priority needs both. With a sum, a square full of people but with no change at all could still score highly, and so could a flooded square where nobody lives. With the product form, if either part is zero the score is zero, and a square scores high only when there is substantial change <i>and</i> substantial exposure. This is the same reasoning as the common "risk = hazard × exposure" idea. The exponent lets an organisation shift the balance between the two.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">55</span><span>Where do the default weights come from, and are they not arbitrary? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>They are documented judgements, not values learned from data: changed share 0.55 and change strength 0.45; people 0.45, important places 0.35, roads 0.20; exponent 0.5. Three things limit the arbitrariness: they are visible and adjustable in the settings; only their relative sizes within a group matter; and every check runs a sensitivity analysis that shows how much each square's position depends on them (Question 58). An organisation with different priorities can change them and see the effect.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">56</span><span>What is the life-safety rule? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>If a hospital, clinic, fire station, ambulance station or shelter lies inside the detected change in a square, and the detection there is reasonably confident (mean confidence at least 0.6), that square is raised to at least High, whatever its score. A score averages many factors; this rule makes sure that a flooded hospital is never ranked Low because few people live around it. The square's reasons say when the rule was applied.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">57</span><span>How is a square's confidence computed, and why is it separate from the score? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Confidence = 0.4 × (low uncertainty) + 0.3 × (agreement with the independent cross-check) + 0.3 × (share of exposure data available); High from 0.75, Medium from 0.5, otherwise Low. It is kept separate because "how urgent" and "how sure" are different questions: a Critical square with Low confidence should be checked before anyone acts on it. Exactly that combination (Low confidence on a Critical or High square) automatically creates a finding for a person.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">58</span><span>What does the sensitivity analysis do? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>It recomputes the whole ranking 200 times with randomly perturbed weights (each weight multiplied by a random factor around 1, with a spread of about 25%, and the exponent shifted slightly within 0.2-0.8). For each square it reports the range of ranks it takes (10th to 90th percentile), how often it keeps its category, and how often it stays in the top 10%; for the whole ranking it reports the average rank correlation with the original. A square shown as "between number 2 and 4, High 96% of the time" is robust; one that jumps between categories needs judgement.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">59</span><span>How is the size of the squares chosen? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>0.5 km for areas below 50 km² and 1 km otherwise, enlarged in steps of 0.5 km when that would give more than 900 squares (for example 1.5 km at 1,450 km²). The factors are expressed relative to the square's size (shares of the square, people and road length per km²), and a test (<code>test_cell_size_does_not_inflate_scores</code>) checks that larger squares do not get higher scores just because they contain more.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">60</span><span>Can a person change a priority? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>Yes. An analyst can set a different category for a square with a written reason. The original score is kept, the change is shown with the person's name and reason, saved in the audit log, and recalled as a correction when the same area is checked again.</p></div>
+  </div>
+</section>
+
+<section class="chapter flow">
+  <div class="keep"><h1><span class="num">Part 7</span>The agent, safety checks and human review</h1>
+
+  <h2>The agent</h2>
+  <div class="qa">
+    <div class="q"><span class="n">61</span><span>You call AegisEO "agentic". What does that mean here, and is there a language model inside? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>An <dfn>agent</dfn> is a program that is given a goal, makes a plan, carries it out by calling tools, checks each result and changes course when something goes wrong, while recording its reasoning. AegisEO's agent does all of this with written rules, not with a language model: for example "take the earliest radar pass" or "if the optical image is cloudy and the methods disagree, re-run with radar leading". So the same inputs always give the same decisions, and every decision has a recorded reason and rule number. A language model is optional and may only reword the final summary. (Doc 9.5)</p></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">62</span><span>What is the agent's plan? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Ten steps: validate the request (safety checks G01-G03); recall earlier checks of the area; acquire images and context data; check the data (G04-G09); detect change; check the detection (G10-G15); assess exposure; rank the squares; report (summary, guidance, draft warnings, findings); deliver (map layers and files). Each step is recorded with its status, and the plan is shown in the full record.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">63</span><span>What are the specialists and the tools? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>An orchestrator runs five specialists, each with one job: data acquisition, perception (change detection), impact assessment, prioritisation and reporting. They act only through 20 registered tools (such as <code>search_imagery</code>, <code>detect_change</code>, <code>query_population</code>, <code>draft_alert</code>), each with a side-effect class: 12 read-only, 4 compute and 4 write-draft (they write drafts, files or review tasks, never anything outside AegisEO). A tool executor allows only registered tools, enforces a budget of 120 calls per check, and records every call with its arguments, result and duration.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">64</span><span>What are the planning rules? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Eight rules numbered from P0 to P9 (P6 and P7 are not used): P0 coarsen the grid if the area exceeds the pixel budget; P1 take the earliest "after" radar pass; P2 choose the clearest optical image; P3 extend an empty search by 7 days, at most twice; P4 match the "before" radar orbit; P5 re-run with radar leading under heavy cloud and low agreement, keeping the better result; P8 continue without a failed data source and mark it missing; P9 use built-up land when population data fail. Each application is recorded with its reason. (Doc 9.5)</p></div>
+  </div>
+
+  <h2>Safety checks</h2>
+  <div class="qa">
+    <div class="q"><span class="n">65</span><span>What are the 18 safety checks? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Small functions applied between the agent's steps. <b>Request</b> (G01-G03): supported disaster type, area size, valid dates. <b>Data</b> (G04-G09): an "after" image exists, a "before" reference exists, the time between them (60 days), radar orbit consistency, optical cloud, and the age of the newest image (more than 10 days for a recent event). <b>Detection</b> (G10-G15): model available, input unlike the training data, implausibly large extent (more than 60% of the area), low confidence, many detections removed by the terrain rule, and the landslide rule. <b>Text</b> (G16-G17): every number grounded in evidence, cautious wording. <b>Action</b> (G18): publication authorised. (Doc 6.3)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">66</span><span>What is the difference between a note, a finding and a block? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>Each safety check ends with one of four outcomes. <b>Pass:</b> nothing to report. <b>Warn</b> (shown as a "note"): the result stands, but the user should know something, and the check ends as "completed with warnings". <b>Escalate</b> (a "finding"): a person must look, and the check ends as "needs review". <b>Block:</b> the action is stopped, for example an invalid request is rejected or a text with an unsupported number is withheld.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">67</span><span>What does G11 measure, and why did it ask for a review of the Sindh check? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>G11 compares the area's input with the training data: for each input channel it computes how many standard deviations the area's median lies from the training mean (a <dfn>z-score</dfn>). Above 1.5 it adds a note, above 2.5 it asks a person. For Sindh, the "before" optical image's shortwave-infrared band B12 had z = 3.29: the dry, bright soil before the monsoon looks unlike the training images. The model may still be right (the map looks plausible), but it is working outside what it learned, so a person should look.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">68</span><span>How does G16 check the numbers in a text? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Every number in a drafted text is extracted and must match a value recorded as evidence in the check (within rounding: 2%, or about half a unit), every date must be one of the recorded observation dates, and every citation must point to an existing fact. Otherwise the text is withheld and replaced by a neutral notice. In the first real runs it once withheld a correct summary because the population source's name contained "(~30 m)" and "30" was not an evidence value; the check failed on the safe side, and the list of known values was then corrected. (Doc 6.5)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">69</span><span>What does G17 block? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Language that claims more than the data show or gives orders: casualty or death-toll wording, "confirmed dead", "everyone must evacuate", "evacuate now", "guaranteed", "certainly flooded", "dispatch teams immediately". Satellite evidence supports cautious statements ("potentially exposed", "likely flooded"); decisions about evacuation belong to the responsible authorities.</p></div>
+  </div>
+
+  <h2>Human review</h2>
+  <div class="qa">
+    <div class="q"><span class="n">70</span><span>What is a finding, and what can the reviewer do with it? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>A finding is an item a person must double-check, created when a safety check escalates or when a Critical or High square has Low confidence. The reviewer opens it, compares the evidence (for example the before and after images), optionally writes a note, and chooses: <b>Looks right</b> (marked as checked; results unchanged), <b>It's wrong</b> (the square is lowered to Low and its waiting draft warnings are rejected; for a finding about the whole check, all waiting draft warnings are rejected), <b>Noted</b> (seen, no judgement), or <b>Run it again</b> (a fresh copy of the check starts). (Doc 6.4)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">71</span><span>What is a draft warning, and what is its life cycle? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>A short, evidence-based message, for example about Critical squares or facilities inside the flooded area, drafted by the reporting step and checked by G16 and G17 (a text that fails is withheld and replaced by a neutral notice). It starts as "pending review". A named person approves or rejects it. If a delivery channel (a webhook address) is configured, an approved warning is sent and becomes "published"; on a server without a channel, as in the demonstration, it is "approved, kept in AegisEO". A rejected warning is never sent, and the rejection is recalled in later checks of the area. (Doc 6.5)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">72</span><span>How can you be sure the software never sends a warning by itself? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>By construction, in three layers. The agent's tool executor permits only read-only, compute and write-draft tools; the only tool that can contact the outside world, <code>publish_alert</code>, is an "external" tool that runs only when an approval value is passed, and it is not even registered in the agent's executor. Only the approval route of the API, acting for a signed-in person, registers it and passes the approver's name as that value. Then G18 blocks publication of practice data, without a named approver, or in a wrong status. Benchmark probes S01, S07 and S08 test exactly these cases. (Doc 13.6)</p></div>
+    <div class="fu"><b>Follow-up:</b> In your demonstration nobody signs in. Whose name is recorded? <i>The fixed name "local-analyst": sign-in is off by default, so the record shows that a person decided but not which person. For real use, sign-in is turned on with one token per person, and the recorded approver is then that person.</i></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">73</span><span>What is recorded about human decisions? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Every decision (finding decisions, approvals, rejections, priority changes, deletions) is written to the audit log with the person's name, the time, the action and any note. Decisions are also stored on the items themselves, so the result page shows who decided what. Later checks of the same area recall corrections (wrong findings, rejected warnings, changed priorities) from this record, show them to the user and add a warning to the new check.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">74</span><span>What is the knowledge base, and why did you remove the "Have a question?" search? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Six short method documents (flood mapping with radar, optical indices, wildfires and landslides, exposure and priority, alerting and review, the flood method). During reporting, the agent retrieves relevant passages with a TF-IDF text search (a ranking of passages by shared, distinctive words) and cites them in the report. The About page also offered a free-text search box over these documents. It was removed as requested in this round: it was a technical side feature that did not help users understand a result. The knowledge base and its citations in reports are unchanged.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">75</span><span>Which final statuses can a check have? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p><b>Completed</b>; <b>completed with warnings</b> (notes to read); <b>needs review</b> (a finding waits for a person); <b>no usable images</b> (<code>insufficient_data</code>); <b>rejected</b> (the request failed G01-G03); <b>failed</b> (an unexpected error); <b>stopped</b> (a person pressed Stop); and <b>interrupted</b> (the server restarted during the check). While it runs, the status is queued or running. Every status is tested. (Doc 6.7)</p></div>
+  </div>
+</section>

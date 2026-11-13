@@ -289,6 +289,20 @@ export interface Dashboard {
 
 export interface Me { user: string; role: "viewer" | "analyst" | "admin"; auth_enabled: boolean }
 
+/** GET /api/config - this server's processing limits and optional features (backend/aegis/api/routes_system.py). */
+export interface ServerConfig {
+  limits: {
+    min_aoi_km2: number;
+    max_aoi_km2: number;
+    default_resolution_m: number;
+    max_grid_pixels: number;
+    full_detail_max_km2: number;
+    max_window_days: number;
+    max_pre_post_gap_days: number;
+  };
+  features: { alert_delivery: boolean; llm_summary: boolean; firms_history: boolean; auth_enabled: boolean; offline: boolean };
+}
+
 export interface Place {
   name: string;
   context: string;

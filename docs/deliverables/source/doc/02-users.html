@@ -1,0 +1,43 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 2</span>Who AegisEO is for, what it is used for, and where it is not suitable</h1>
+  <p class="lead">AegisEO is an advisory tool. It helps people decide where to look first; it does not decide for them, and it does not replace field reports or official warnings.</p>
+
+  <h2>2.1 Intended users</h2>
+  <table>
+    <thead><tr><th style="width:24%">User</th><th>What they need from AegisEO</th><th style="width:24%">Main pages</th></tr></thead>
+    <tbody>
+      <tr><td><b>Response analyst</b> (disaster agency, NGO, local government GIS team)</td><td>A quick first map of a flood, burn scar or landslide area; the number of people and facilities potentially exposed; a ranked list of places to verify; a report to share.</td><td>Check a place, result page, downloads</td></tr>
+      <tr><td><b>Reviewer / supervisor</b></td><td>To double-check doubtful findings and approve or reject draft warnings before anything leaves the system.</td><td>To review, the result's "To review" tab</td></tr>
+      <tr><td><b>Student, researcher, trainer</b></td><td>To learn how satellite change detection works, using past disasters and practice runs, with every step explained.</td><td>About pages, practice runs, "How we know" tab</td></tr>
+      <tr><td><b>Administrator</b></td><td>To run the server, set limits and optional features (for example the area limit, sign-in, a delivery channel for approved warnings) and watch data-source health.</td><td>Configuration (environment variables), Data sources page</td></tr>
+    </tbody>
+  </table>
+  <p>On a server with sign-in switched on (setting <code>AEGIS_AUTH_ENABLED=true</code>), each person has a <dfn>role</dfn>, a named set of permissions: a <i>viewer</i> can only look, an <i>analyst</i> can start checks and make review decisions, and an <i>admin</i> can also delete checks and start the test suite. On the local copy used for this report sign-in is off, so every visitor acts as the built-in analyst "local-analyst".</p>
+
+  <h2>2.2 Use cases</h2>
+  <h3>Use case 1: first map of a river flood</h3>
+  <p>A large monsoon flood is reported in a district. The analyst chooses the district on the map, selects <i>Flood</i> and the start date. Within minutes AegisEO shows how many square kilometres look newly flooded, how many people normally live there, which hospitals or schools are inside or within 500 m, and which 1 km squares rank High. The analyst downloads the PDF for the morning coordination meeting. This is exactly what the Sindh 2022 case study demonstrates (78.2 km² newly flooded, about 7,274 people potentially exposed, 24 squares ranked High).</p>
+  <h3>Use case 2: burn-scar mapping after a wildfire</h3>
+  <p>After a wildfire, the analyst runs a <i>Wildfire</i> check with a clear optical image before and after the fire. AegisEO maps burned land and how severely each part burned. The Palisades Fire 2025 case study mapped 53.9 km² of burn scar and ranked squares in residential areas as Critical.</p>
+  <h3>Use case 3: screening for landslides</h3>
+  <p>After extreme rain in hilly terrain, a <i>Landslide</i> check marks possible landslide scars. Because landslide detection from these images is uncertain, every landslide result automatically becomes a finding for a person to confirm (safety check G15). The Wayanad 2024 case study shows this.</p>
+  <h3>Use case 4: checking a live alert</h3>
+  <p>The "Happening now" option lists current alerts from GDACS (the Global Disaster Alert and Coordination System run by the European Commission and the United Nations). Choosing a flood or wildfire alert fills in the place and date automatically.</p>
+  <h3>Use case 5: training and demonstration</h3>
+  <p>Practice runs use a made-up scene placed at 0° N 0° E in the open ocean, with known correct answers. They finish in seconds, work without internet, and their warnings can never be sent. They are ideal for teaching and for showing the full workflow when the internet is slow.</p>
+
+  <h2>2.3 Situations where AegisEO is not suitable</h2>
+  <div class="box limit"><span class="bt">Limitations users must know</span>
+    <ul style="margin:0">
+      <li><b>It measures extent, not harm.</b> It shows where water, burned land or possible landslides are; not water depth, damage to buildings, injuries or deaths.</li>
+      <li><b>Fast floods can be missed.</b> If water drains away before a satellite passes over, nothing is left to see. This happened in the Derna 2023 case study (only 0.03 km² detected).</li>
+      <li><b>Water among buildings and under trees is under-detected</b> by radar, so urban and forest flooding can be under-counted.</li>
+      <li><b>Small features are invisible.</b> Pixels are 10-20 m; single houses, narrow streets and small landslides cannot be seen.</li>
+      <li><b>Population and facility data are estimates</b> from 2015-2020 models and volunteer maps; missing hospitals in OpenStreetMap cannot be counted.</li>
+      <li><b>Unusual landscapes</b> (deserts, snow, very dense cities) can be outside what the flood model learned from 11 flood events; safety check G11 warns when this is likely.</li>
+      <li><b>Timing depends on the satellites.</b> A radar satellite images the same place only every 6-12 days, so "after" images may not exist yet for a very recent event.</li>
+      <li><b>One check covers at most 1,500 km²</b> by default (Chapter 7 explains why); larger regions must be split.</li>
+      <li><b>It is advisory.</b> It must not be used as the sole basis for evacuation orders or official warnings.</li>
+    </ul>
+  </div>
+</section>

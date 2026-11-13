@@ -1,0 +1,40 @@
+<section class="no-toc">
+  <h1 style="font-size:20pt">Contents</h1>
+  <div class="toc" id="toc"></div>
+</section>
+
+<section class="no-toc" style="break-before: page">
+  <h1 style="font-size:20pt">How to use this document</h1>
+  <p class="lead">The questions are grouped by topic and become harder from Part 1 to Part 11. Each question is marked with its level:</p>
+  <ul>
+    <li><span class="lvl b">Basic</span> what the project is and does; expected from anyone presenting it.</li>
+    <li><span class="lvl i">Intermediate</span> how a part works, with numbers and file names.</li>
+    <li><span class="lvl c">Challenging</span> critical questions about assumptions, weaknesses and alternatives.</li>
+  </ul>
+  <p>Each answer is written to be spoken in about 30 to 60 seconds. A grey box below an answer contains a likely <b>follow-up question</b> and its answer. Technical terms are explained the first time they appear in this document. References such as "(Doc 7.5)" point to the chapter and section of the project documentation where the topic is explained in full.</p>
+  <div class="box key"><span class="bt">A reliable way to answer</span>
+    <ol style="margin:0">
+      <li>Answer the question in one sentence first.</li>
+      <li>Then give the evidence: a number, a file, or what the screen shows.</li>
+      <li>Then, where it fits, name a limitation. Examiners trust a candidate who knows where the system stops working.</li>
+      <li>If you do not know, say so and explain how you would find out (for example "the threshold is in <code>guardrails.py</code>; I would check it there").</li>
+    </ol>
+  </div>
+  <div class="box limit"><span class="bt">Keep facts and plans apart</span>Always distinguish what AegisEO does today from what it could do in future (Doc Chapter 16). Never describe a proposal as a feature, and never describe practice (simulated) data as real.</div>
+  <h2 style="margin-top:8mm">Ten numbers worth remembering</h2>
+  <table class="compact">
+    <thead><tr><th style="width:26%">Number</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><b>0.844</b></td><td>IoU of the deployed flood model on 90 unseen test chips (0.828 on the unseen Bolivia event).</td></tr>
+      <tr><td><b>0.739 / 0.653</b></td><td>IoU with 50% simulated cloud / with no optical image at all (the optical-only model gets 0.419 at 50% cloud).</td></tr>
+      <tr><td><b>0.006</b></td><td>Expected calibration error of the deployed model: its probabilities can be taken at face value.</td></tr>
+      <tr><td><b>18</b></td><td>Safety checks, G01 to G18.</td></tr>
+      <tr><td><b>12/12 and 8/8</b></td><td>Benchmark scenarios and safety probes passed (re-run on 8 November 2026).</td></tr>
+      <tr><td><b>93 / 32 / 7</b></td><td>Backend, frontend and end-to-end tests, all passing.</td></tr>
+      <tr><td><b>1,500 km²</b></td><td>Largest area per check: a configurable processing budget, not a satellite limit.</td></tr>
+      <tr><td><b>20 m / 2.6 million</b></td><td>Default pixel size / pixel budget of the analysis grid.</td></tr>
+      <tr><td><b>6-12 days, about 5 days</b></td><td>Typical revisit of the radar (Sentinel-1) and optical (Sentinel-2) satellites.</td></tr>
+      <tr><td><b>3-10 minutes</b></td><td>Measured time of a first real check (seconds for a repeat, from saved images).</td></tr>
+    </tbody>
+  </table>
+</section>

@@ -12,18 +12,6 @@ const TEAL = "#0f6b66";
 const AMBER = "#f2b134";
 const WATER = "#1f6fd1";
 
-export function BrandMark({ size = 38 }: { size?: number }) {
-  return (
-    <svg className="brand-mark" width={size} height={size} viewBox="0 0 40 40" aria-hidden>
-      <rect x="1" y="1" width="38" height="38" rx="11" fill={INK} />
-      <ellipse cx="20" cy="20" rx="13.5" ry="6.5" fill="none" stroke="#5fb3aa" strokeWidth="1.6" transform="rotate(-24 20 20)" />
-      <circle cx="20" cy="20" r="5.2" fill="#fff" />
-      <path d="M14.8 21.6c1.7-1.1 3.4-1.1 5.2 0s3.5 1.1 5.2 0" stroke={WATER} strokeWidth="1.8" fill="none" strokeLinecap="round" />
-      <circle cx="31.4" cy="14.6" r="2.6" fill={AMBER} />
-    </svg>
-  );
-}
-
 function Ground({ flooded }: { flooded?: boolean }) {
   return (
     <g>
@@ -58,11 +46,11 @@ function Cloud({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
   );
 }
 
-/** Camera satellites (Sentinel-2) can't see through cloud. */
+/** Optical satellites (Sentinel-2) can't see through cloud. */
 export function CameraIllustration() {
   return (
     <svg className="illus" viewBox="0 0 280 190" role="img" aria-labelledby="cam-t">
-      <title id="cam-t">A camera satellite's view stops at the clouds, so the flooded ground below is hidden.</title>
+      <title id="cam-t">An optical satellite records reflected sunlight, which stops at the clouds, so the flooded ground below is hidden.</title>
       <rect width="280" height="190" fill="#f3f1ea" />
       <path d="M140 46 L92 104 L188 104 Z" fill={AMBER} opacity="0.28" />
       <Satellite x={140} y={30} />
@@ -82,7 +70,7 @@ export function RadarIllustration() {
   const calm = useCalm();
   return (
     <svg className="illus" viewBox="0 0 280 190" role="img" aria-labelledby="radar-t">
-      <title id="radar-t">A radar satellite sends waves through the clouds to the ground and listens for the echo, so it can see the flood.</title>
+      <title id="radar-t">A radar satellite sends microwave pulses through the clouds to the ground and measures the echo, so it can detect the flood.</title>
       <rect width="280" height="190" fill="#f3f1ea" />
       <Satellite x={140} y={30} />
       <Cloud x={140} y={102} s={1.35} />

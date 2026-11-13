@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>AegisEO diagrams</title>
+<style>
+  @font-face { font-family: "Inter"; src: url("fonts/inter-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+  body { margin: 0; background: #fff; font-family: Inter, sans-serif; }
+  .wrap { width: 1000px; margin: 0 0 24px; }
+  .wrap h2 { font-size: 13px; color: #5c677a; margin: 8px 0; }
+  .diagram svg { display: block; width: 1000px; height: auto; }
+</style>
+</head>
+<body>
+<div id="all"></div>
+<script src="diagrams.js"></script>
+<script>
+  const all = document.getElementById("all");
+  for (const n of window.AEGIS_DIAGRAMS.names) {
+    const w = document.createElement("div");
+    w.className = "wrap";
+    w.innerHTML = `<h2>${n}</h2><div class="diagram" id="dg-${n}">${window.AEGIS_DIAGRAMS.render(n)}</div>`;
+    all.appendChild(w);
+  }
+</script>
+</body>
+</html>

@@ -12,7 +12,7 @@ test("home explains what this is and offers clear choices, with no pop-up", asyn
   await expect(page.getByRole("heading", { name: "How it works, in four pictures" })).toBeVisible();
   await expect(page.getByText("Connected")).toBeVisible();
 
-  for (const [link, heading] of [["Results", "Results"], ["To review", "To review"], ["About", /Satellite photos that show/]] as const) {
+  for (const [link, heading] of [["Results", "Results"], ["To review", "To review"], ["About", /Satellite images that show/]] as const) {
     await main(page).getByRole("link", { name: link }).click();
     await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
   }
@@ -100,6 +100,18 @@ test("end to end: a practice run, its short answer, priorities, evidence and a r
   await expect(page.locator(".summary-sentence")).toContainText(/looks newly flooded|No flooding was found/);
   await expect(page.locator(".map-card canvas").first()).toBeVisible();
 
+  // the map can fill the window and return to its normal size (button and Escape)
+  await page.getByRole("button", { name: "Expand map" }).click();
+  const frame = page.locator(".map-frame.map-expanded");
+  await expect(frame).toBeVisible();
+  const vp = page.viewportSize()!;
+  await expect.poll(async () => frame.boundingBox()).toMatchObject({ x: 0, y: 0, width: vp.width, height: vp.height });
+  await page.getByRole("button", { name: "Back to normal size" }).click();
+  await expect(frame).toHaveCount(0);
+  await page.getByRole("button", { name: "Expand map" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".map-frame.map-expanded")).toHaveCount(0);
+
   // where to help first: open the top square and see the reasons
   const first = page.locator("article.square-card").first();
   await first.locator("button[aria-expanded]").click();
@@ -113,8 +125,8 @@ test("end to end: a practice run, its short answer, priorities, evidence and a r
   await page.getByRole("button", { name: "Safety checks", exact: true }).click();
   await expect(page.getByText(/G04 /).first()).toBeVisible();
 
-  // needs your OK: approve a draft warning - practice warnings are never sent
-  await page.getByRole("tab", { name: /Needs your OK/ }).click();
+  // to review: approve a draft warning - practice warnings are never sent
+  await page.getByRole("tab", { name: /To review/ }).click();
   const warning = page.locator("article.review-card").filter({ hasText: "Waiting for approval" }).first();
   const readFirst = warning.getByRole("button", { name: "Read and decide" });
   if (await readFirst.isVisible()) await readFirst.click();

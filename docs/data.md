@@ -28,7 +28,8 @@ FIRMS), *derived products* (probabilities, extents, priorities) and *simulated d
 
 ### Acquisition and preprocessing (per analysis)
 
-1. **AOI** validated (geometry repair, WGS84 range, no antimeridian crossing, 0.25-1500 km2).
+1. **AOI** validated (geometry repair, WGS84 range, no antimeridian crossing, 0.25-1500 km2 by default;
+   the maximum is the server setting `AEGIS_MAX_AOI_KM2`, which the UI reads from `GET /api/config`).
 2. **Grid**: UTM zone of the AOI centroid, snapped to 20 m (coarsened in 10 m steps above
    2.6 million pixels). Every layer is warped onto this grid (GDAL WarpedVRT over HTTP range
    requests); results are cached as GeoTIFF keyed by item, asset and grid.

@@ -7,15 +7,15 @@ import { fmtInt, timeAgo } from "@/lib/format";
 import { useDocumentTitle } from "@/lib/hooks";
 
 const GROUPS: [string, string, string][] = [
-  ["observation", "Satellite photos", "The photos AegisEO compares. Both are free European Copernicus satellites."],
-  ["context", "Maps of people, places and land", "Used to work out who and what is in the hit area, and to ignore rivers and lakes that are always there."],
+  ["observation", "Satellite images", "The images AegisEO compares. Both come from free European Copernicus satellite missions."],
+  ["context", "Maps of people, places and land", "Used to estimate who and what is in the changed area, and to ignore rivers and lakes that are always there."],
   ["feed", "Live disaster alerts", "Used to show what is happening now, and to cross-check fires."],
   ["service", "Helper services", "Not used to find damage - they make the website easier to use."],
   ["training", "Training data", "Used once, to teach the flood model. Not needed when running a check."],
 ];
 
 export const SOURCE_STATUS: Record<string, [string, string, string]> = {
-  operational: ["ok", "Working", "Answered the last check normally."],
+  operational: ["ok", "Working", "Answered the last check normally (for the optional writing helper: a key is set; it is not contacted by this check)."],
   degraded: ["warn", "Partly working", "Slow or answering with errors. Checks still run but may miss some of this data."],
   unavailable: ["danger", "Not reachable", "Can't be reached right now. Checks still run and say clearly what is missing - nothing is made up."],
   offline: ["warn", "Offline mode", "This server is running without internet, using saved data only."],
@@ -26,8 +26,8 @@ export const SOURCE_STATUS: Record<string, [string, string, string]> = {
 
 /** Plain names and uses, keyed by source id (backend/aegis/sources/registry.py). Official names stay visible underneath. */
 const PLAIN: Record<string, [string, string]> = {
-  "sentinel-1-rtc": ["Radar satellite (Sentinel-1)", "Radar photos that see through clouds, day and night. Used to find water."],
-  "sentinel-2-l2a": ["Camera satellite (Sentinel-2)", "Colour photos, plus colours our eyes can't see. Used to find water, burned land and plant loss, and to measure clouds."],
+  "sentinel-1-rtc": ["Radar satellite (Sentinel-1)", "Radar images that can be taken through clouds, by day and by night. Used to find water."],
+  "sentinel-2-l2a": ["Optical satellite (Sentinel-2)", "Optical images: visible colours plus infrared light. Used to find water, burned land and vegetation loss, and to measure clouds."],
   "cop-dem-glo-30": ["Height map of the ground", "Shows hills and valleys, so water isn't wrongly found on steep slopes, and landslides are looked for where it's steep."],
   "jrc-gsw": ["Map of rivers and lakes", "Shows water that is always there, so it isn't counted as flooding."],
   "esa-worldcover": ["Land-cover map", "Shows where buildings, fields and forests are - used to describe what kind of land was hit."],
@@ -38,7 +38,7 @@ const PLAIN: Record<string, [string, string]> = {
   "usgs-earthquakes": ["Earthquake list (USGS)", "Recent strong earthquakes - shown for context only."],
   "nasa-firms": ["Active fires (NASA FIRMS)", "Where satellites saw fires burning - used to double-check wildfire results."],
   "open-meteo": ["Rain records", "How much rain fell each day around the event."],
-  "sen1floods11": ["Expert-mapped flood photos", "Flood photos mapped by hand by experts - used once, to teach the flood model."],
+  "sen1floods11": ["Expert-mapped flood images", "Flood images mapped by hand by experts, used once to train the flood model."],
   "nominatim": ["Place search", "Finds places when you type a name, so you don't need coordinates."],
   "anthropic-claude": ["Writing helper (optional)", "Can word the summary more naturally from the measured numbers. It never measures anything itself."],
 };

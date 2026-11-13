@@ -1,0 +1,146 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 6</span>Safety checks, findings, warnings and human approval</h1>
+  <p class="lead">AegisEO prepares; a person decides. This chapter explains precisely what each review-related term means, why it exists, what causes it, how it is implemented, what the user is expected to do, what happens afterwards, and where the information is stored.</p>
+
+  <h2>6.1 Why a person must stay in charge</h2>
+  <p>A satellite-based map can be wrong in convincing ways: cloud shadows can look like water, a desert can confuse a model trained on green floodplains, and a landslide indicator can fire on a newly ploughed field. Acting on a wrong map wastes scarce resources; publishing a wrong warning causes alarm and erodes trust. AegisEO therefore runs at an <dfn>advisory autonomy level</dfn>: the software may search, compute and draft on its own, but anything with consequences outside the system, and anything it is unsure about, waits for a named person. This principle is enforced in code, not only in the interface: the agent has no permission to send anything (Section 6.5).</p>
+
+  <h2>6.2 The vocabulary at a glance</h2>
+  <table>
+    <thead><tr><th style="width:15%">Term (interface)</th><th style="width:31%">What it is</th><th style="width:17%">Who acts</th><th>What happens next</th></tr></thead>
+    <tbody>
+      <tr><td><b>Safety check</b><br/><span class="small">guardrail</span></td><td>One of 18 automatic tests (G01-G18) run during every check on the request, the images, the result and any text written.</td><td>Automatic</td><td>Each check passes, records a note, asks for a person, or stops something unsafe.</td></tr>
+      <tr><td><b>Note</b><br/><span class="small">guardrail outcome "warn"</span></td><td>A recorded caution that needs no action, for example "the radar images were taken from different orbits".</td><td>Automatic; the user reads it</td><td>Shown under "Safety-check notes"; the check ends as "Done, with notes".</td></tr>
+      <tr><td><b>Finding to double-check</b><br/><span class="small">review task</span></td><td>An item a person must decide on, created when a safety check needs human judgement or a Critical/High square has weak evidence.</td><td>A person (analyst role)</td><td>Choose Looks right, It's wrong, Noted or Run it again; the check's status updates.</td></tr>
+      <tr><td><b>Draft warning</b><br/><span class="small">alert</span></td><td>A short message about the area or a high-priority square, written automatically and checked number by number.</td><td>A person approves or rejects</td><td>Approved warnings are sent only if a delivery channel exists; otherwise they stay inside AegisEO.</td></tr>
+      <tr><td><b>Approval</b></td><td>A named person's decision that a draft warning may be released.</td><td>A person</td><td>Publication check G18, then delivery or "kept in AegisEO".</td></tr>
+      <tr><td><b>Priority change</b><br/><span class="small">override</span></td><td>A person replaces a square's category, with a reason, when they know something the images cannot show.</td><td>A person</td><td>Shown in the list and the report; AegisEO's own ranking is kept beside it.</td></tr>
+      <tr><td><b>Needs a person to check</b><br/><span class="small">status needs_review</span></td><td>The status of a finished check that has at least one open finding.</td><td>Set automatically</td><td>Becomes "Done, with notes" when every finding is answered.</td></tr>
+    </tbody>
+  </table>
+  <div class="box key"><span class="bt">Key idea</span>Two different things can wait for a person, and they are kept separate everywhere in the interface: a <b>finding</b> asks "is this result right?"; a <b>draft warning</b> asks "may this message be released?". Notes ask nothing; they are information.</div>
+
+  <h2>6.3 Safety checks</h2>
+  <p>A <dfn>guardrail</dfn> is a check placed between the steps of an automated process that can stop or redirect it. AegisEO's 18 guardrails are plain functions in <code>backend/aegis/agents/guardrails.py</code>, with their thresholds written as named constants so they can be read, reviewed and tested. Each returns one of four outcomes:</p>
+  <figure>
+    <div class="diagram" data-diagram="outcomes"></div>
+    <figcaption><b>Figure 6.1</b> The four possible outcomes of a safety check and what each one causes.</figcaption>
+  </figure>
+  <table class="compact">
+    <thead><tr><th>Code</th><th>Stage</th><th>What is checked</th><th>Threshold</th><th>Outcome if it fails</th></tr></thead>
+    <tbody>
+      <tr><td>G01</td><td>Request</td><td>Disaster type is supported</td><td>flood, wildfire, landslide</td><td><span class="chip danger">stop</span> rejected</td></tr>
+      <tr><td>G02</td><td>Request</td><td>Area size</td><td>0.25-1,500 km² (setting)</td><td><span class="chip danger">stop</span> rejected</td></tr>
+      <tr><td>G03</td><td>Request</td><td>Dates consistent; no future event; each search ≤ 120 days</td><td>120 days</td><td><span class="chip danger">stop</span> rejected</td></tr>
+      <tr><td>G04</td><td>Images</td><td>At least one usable 'after' image</td><td>radar, or optical with &gt; 2% valid pixels</td><td><span class="chip danger">stop</span> no usable images</td></tr>
+      <tr><td>G05</td><td>Images</td><td>A 'before' image exists</td><td>-</td><td><span class="chip warn">note</span></td></tr>
+      <tr><td>G06</td><td>Images</td><td>Before-after gap</td><td>&gt; 60 days</td><td><span class="chip warn">note</span></td></tr>
+      <tr><td>G07</td><td>Images</td><td>Radar before/after from the same orbit</td><td>same relative orbit</td><td><span class="chip warn">note</span></td></tr>
+      <tr><td>G08</td><td>Images</td><td>Cloud over the 'after' optical image</td><td>&gt; 60%</td><td><span class="chip warn">note</span> if radar exists, otherwise <span class="chip acc">person</span></td></tr>
+      <tr><td>G09</td><td>Images</td><td>Newest image age, for events in the last 30 days</td><td>&gt; 10 days</td><td><span class="chip warn">note</span></td></tr>
+      <tr><td>G10</td><td>Result</td><td>The flood model was available</td><td>-</td><td><span class="chip acc">person</span> (backup rules used)</td></tr>
+      <tr><td>G11</td><td>Result</td><td>Scene resembles the training data (largest channel z-score)</td><td>&gt; 1.5 note; &gt; 2.5 person</td><td><span class="chip warn">note</span> / <span class="chip acc">person</span></td></tr>
+      <tr><td>G12</td><td>Result</td><td>Share of the area marked</td><td>&gt; 60%</td><td><span class="chip acc">person</span></td></tr>
+      <tr><td>G13</td><td>Result</td><td>Mean uncertainty; agreement with the cross-check</td><td>&gt; 0.15; &lt; 55%</td><td><span class="chip acc">person</span></td></tr>
+      <tr><td>G14</td><td>Result</td><td>Share of candidates removed by terrain</td><td>&gt; 30%</td><td><span class="chip warn">note</span></td></tr>
+      <tr><td>G15</td><td>Result</td><td>Landslide results always need a person</td><td>-</td><td><span class="chip acc">person</span></td></tr>
+      <tr><td>G16</td><td>Text</td><td>Every number, date and citation in written text matches the evidence</td><td>2% or rounding</td><td><span class="chip danger">stop</span> text withheld</td></tr>
+      <tr><td>G17</td><td>Text</td><td>No casualty claims, orders or false certainty</td><td>list of banned phrases</td><td><span class="chip danger">stop</span> text withheld</td></tr>
+      <tr><td>G18</td><td>Approval</td><td>Named approver, valid status, never practice data</td><td>-</td><td><span class="chip danger">stop</span> not sent</td></tr>
+    </tbody>
+  </table>
+  <p>A <dfn>z-score</dfn>, used by G11, measures how many standard deviations a value lies from the average of the training data; a score above 2.5 means the area's images are statistically unusual compared with everything the model learned from. On the Sindh case study, G11 fired because the dry season's bright desert soils (short-wave infrared band B12) gave a z-score of 3.29.</p>
+  <p>Every outcome is saved in the <code>guardrail_checks</code> table and is visible under <i>How we know → Safety checks</i> and in the full step-by-step record. Notes also appear under <i>Safety-check notes</i> at the top of the result.</p>
+
+  <h2>6.4 Findings to double-check</h2>
+  <figure>
+    <div class="diagram" data-diagram="review"></div>
+    <figcaption><b>Figure 6.2</b> How a finding is created and resolved (<code>_escalate</code> in <code>agents/orchestrator.py</code>; <code>decide_review</code> in <code>backend/aegis/actions.py</code>).</figcaption>
+  </figure>
+  <p><b>What causes a finding.</b> At the end of the reporting step, the orchestrator calls the tool <code>escalate_to_analyst</code> once for every safety check that asked for a person (kind <i>quality_check</i>) and once for every Critical or High square whose confidence is Low (kind <i>verify_detection</i>). Each call writes one row to the <code>review_tasks</code> table with status <i>open</i>. If any finding exists, the check ends with status <code>needs_review</code>, shown as "Needs a person to check".</p>
+  <p><b>What the user is expected to do.</b> Open the finding (on the To review page or the result's To review tab), read <i>Why you're asked</i> and <i>What to look at</i>, open the map (the link jumps to the square concerned), compare the 'before' and 'after' images, optionally write a note, and choose one decision:</p>
+  <table class="compact">
+    <thead><tr><th style="width:18%">Button</th><th style="width:17%">Stored as</th><th>Exact effect (from <code>decide_review</code>)</th></tr></thead>
+    <tbody>
+      <tr><td>Looks right</td><td><code>confirm</code></td><td>The finding is resolved; results are unchanged.</td></tr>
+      <tr><td>It's wrong</td><td><code>false_positive</code></td><td>For a square finding: that square's category is overridden to Low with the reason "analyst: false positive", and its waiting draft warnings are rejected. For a whole-check finding: all of the check's waiting warnings are rejected; priorities are unchanged.</td></tr>
+      <tr><td>Noted</td><td><code>acknowledge</code></td><td>Marked as seen, without judging the result.</td></tr>
+      <tr><td>Run it again</td><td><code>request_rerun</code></td><td>A fresh copy of the check (same area, dates and settings) is created and started.</td></tr>
+    </tbody>
+  </table>
+  <p><b>What happens next.</b> The finding's status becomes <i>resolved</i>, with the decision, the person's name, the time and the note. An entry is written to the <code>audit_log</code> table (for example <code>review.false_positive</code>). When the last open finding of a check is resolved, the check's status changes from <code>needs_review</code> to <code>completed_with_warnings</code> ("Done, with notes"). A second decision on the same finding is refused (HTTP 409 "already resolved"). Later checks of an overlapping area list these corrections (Section 5.9).</p>
+  <div class="pair">
+    <figure><img src="../../screenshots/44-review-finding-open.jpg" alt="An open finding" /><figcaption><b>Figure 6.3</b> An open finding on the To review page, with the reason, what to look at, a link to the map, a note field and the four decisions, each stating its effect.</figcaption></figure>
+    <figure><img src="../../screenshots/43-review-page.jpg" alt="To review page with explanation" /><figcaption><b>Figure 6.4</b> The To review page now opens with "How reviewing works", four cards explaining safety checks, findings, draft warnings and priority changes.</figcaption></figure>
+  </div>
+
+  <h2>6.5 Draft warnings and approval</h2>
+  <figure>
+    <div class="diagram" data-diagram="alerts"></div>
+    <figcaption><b>Figure 6.5</b> The life of a draft warning (<code>build_alerts</code> in <code>agents/narrative.py</code>, <code>ReportingAgent</code> in <code>agents/specialists.py</code>, <code>decide_alert</code> in <code>actions.py</code>).</figcaption>
+  </figure>
+  <p><b>What causes a draft warning.</b> After every finished check, the reporting step builds one <i>situation summary</i> for the whole area and one warning for each Critical or High square, up to five, from fixed templates filled with the measured facts. Each is stored in the <code>alerts</code> table with status <code>pending_review</code>.</p>
+  <p><b>How the text is checked.</b> Before storing, each text passes two safety checks. <b>G16 (grounding)</b> extracts every number and date from the text and requires each to match a recorded measurement (within 2%, or the rounding of the displayed value, or as a percentage), and every citation to refer to a recorded fact. <b>G17 (language)</b> rejects phrases such as "confirmed deaths", "casualties", "death toll", "evacuate now", "everyone must evacuate", "guaranteed", "definitely flooded" or "dispatch teams immediately". A text that fails is replaced by a short neutral notice ("Automatically generated text failed verification and was withheld") and marked <i>Text withheld</i>; it can never slip through. During real-data testing this check once blocked a correct text: the population source label "(~30 m)" contained the number 30, which is not a measurement. The guardrail failed safe (it withheld the text rather than letting an unverified number through), and the list of allowed values was then corrected (documented in <code>docs/failure_analysis.md</code>).</p>
+  <p><b>What the user is expected to do.</b> Read the message ("The message that would be sent"), optionally open <i>Evidence behind it</i>, optionally write a note, and press <b>Approve</b> or <b>Reject</b>.</p>
+  <p><b>What happens next.</b></p>
+  <ul>
+    <li><b>Reject</b>: status <code>rejected</code>; the person, time and note are saved; the warning is never sent; later checks of the area list the rejection.</li>
+    <li><b>Approve</b>: the person's name and time are saved and safety check <b>G18</b> runs. For practice data G18 always blocks publication: the warning is marked approved but "never sent". For real data, the <code>publish_alert</code> tool runs with the person's name as its <dfn>approval token</dfn>. If an administrator has configured a <dfn>webhook</dfn> (a web address, set in <code>AEGIS_ALERT_WEBHOOK_URL</code>, that receives an HTTP POST with the warning as JSON, for example a messaging system's integration endpoint), the warning is sent there and its status becomes <code>published</code> ("Approved and sent"). Without a webhook, as on this copy, it stays <code>approved</code> ("Approved, kept in AegisEO"); if sending fails, the error is recorded on the warning.</li>
+    <li>A finding marked "It's wrong" also rejects the related waiting warnings automatically.</li>
+  </ul>
+  <p>The agent itself can never send anything. Its tools are classified by <dfn>side effect</dfn>: <i>read_only</i> (fetch data), <i>compute</i> (calculate), <i>write_draft</i> (store drafts and findings) and <i>external</i> (affect the outside world). The tool executor refuses any external tool call that does not carry a person's approval token, and the autonomous agent is never given one; only the approval route of the API, acting for a signed-in person, supplies it. A safety probe in the benchmark (S01) tests exactly this.</p>
+  <div class="box limit"><span class="bt">Who the "named person" is without sign-in</span>Sign-in is off by default (<code>AEGIS_AUTH_ENABLED=false</code>), as on the local copy used for this report. Every decision is then recorded under the fixed name <code>local-analyst</code> with the administrator role (<code>backend/aegis/api/deps.py</code>), so the record shows that a person decided but not which person. For real use, sign-in must be turned on with one token per person (<code>AEGIS_API_TOKENS</code>, roles viewer, analyst and admin); the recorded approver is then that person's name.</div>
+  <div class="pair">
+    <figure><img src="../../screenshots/21-draft-warning-decide.jpg" alt="Draft warning ready for a decision" /><figcaption><b>Figure 6.6</b> A draft warning from a practice run: severity, status, "Numbers checked" (G16 passed), the message, its evidence and the two decisions with their effects.</figcaption></figure>
+    <figure><img src="../../screenshots/20-practice-review-tab.jpg" alt="Review tab of a practice run" /><figcaption><b>Figure 6.7</b> A result's To review tab separates "Findings to double-check" from "Draft warnings" and explains both.</figcaption></figure>
+  </div>
+
+  <h2>6.6 Priority changes</h2>
+  <p>Under <i>Where to help first</i>, any square can be given a different category with <b>Change this square's priority</b>, for example when a local team reports that the water has receded. A reason of at least 5 characters is required. The new category is stored in <code>priority_cells.override_category</code> beside the original <code>category</code>, with the reason and the person's name; the list and reports show "(changed by a person)" and the original ranking. "Undo my change" restores AegisEO's own category. Each change is written to the audit log (<code>priority.override</code> or <code>priority.override_cleared</code>) and remembered for later checks of the area.</p>
+
+  <h2>6.7 The status of a check</h2>
+  <table class="compact">
+    <thead><tr><th>Stored status</th><th>Shown as</th><th>Meaning and what to do</th></tr></thead>
+    <tbody>
+      <tr><td><code>queued</code></td><td>Waiting to start</td><td>Waiting for a free worker (two checks run at a time).</td></tr>
+      <tr><td><code>running</code></td><td>Working on it</td><td>Progress is shown in five stages.</td></tr>
+      <tr><td><code>completed</code></td><td>Done</td><td>Every safety check passed.</td></tr>
+      <tr><td><code>completed_with_warnings</code></td><td>Done, with notes</td><td>Notes were recorded, or all findings were answered. Read the notes.</td></tr>
+      <tr><td><code>needs_review</code></td><td>Needs a person to check</td><td>At least one finding is open. Answer it under To review.</td></tr>
+      <tr><td><code>insufficient_data</code></td><td>No usable images</td><td>G04 stopped the check. Make the 'after' search longer or check the date.</td></tr>
+      <tr><td><code>rejected</code></td><td>Couldn't start</td><td>G01-G03 refused the request.</td></tr>
+      <tr><td><code>failed</code> / <code>cancelled</code> / <code>interrupted</code></td><td>Something went wrong / Stopped / Interrupted</td><td>An unexpected error, a person pressed Stop, or the server restarted. Run it again.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>6.8 Where the information comes from and where it goes</h2>
+  <table class="compact">
+    <thead><tr><th>Information</th><th>Created by</th><th>Stored in</th><th>Shown in</th></tr></thead>
+    <tbody>
+      <tr><td>Safety-check outcomes</td><td>Orchestrator (automatic)</td><td><code>guardrail_checks</code></td><td>Safety-check notes, How we know, record, PDF</td></tr>
+      <tr><td>Findings</td><td>Tool <code>escalate_to_analyst</code></td><td><code>review_tasks</code></td><td>To review pages, Home banner, tab badges</td></tr>
+      <tr><td>Draft warnings</td><td>Tool <code>draft_alert</code></td><td><code>alerts</code></td><td>To review pages</td></tr>
+      <tr><td>Decisions, approvals, rejections</td><td>A person through the API (analyst role)</td><td><code>review_tasks</code>, <code>alerts</code>, <code>audit_log</code></td><td>"Already decided" lists, dashboard counts</td></tr>
+      <tr><td>Priority changes</td><td>A person</td><td><code>priority_cells</code>, <code>audit_log</code></td><td>Square cards, CSV, PDF</td></tr>
+      <tr><td>Sent warnings</td><td>Tool <code>publish_alert</code> after approval</td><td><code>alerts.delivery</code></td><td>Warning card; the external webhook (if configured)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>6.9 What is automatic and what is human</h2>
+  <div class="pair">
+    <div class="box app" style="margin:0"><span class="bt">Automatic</span><ul style="margin:0"><li>Running all 18 safety checks.</li><li>Recording notes.</li><li>Creating findings and draft warnings.</li><li>Checking warning text (G16, G17).</li><li>Withholding text that fails.</li><li>Updating the check's status.</li><li>Recalling earlier corrections.</li></ul></div>
+    <div class="box key" style="margin:0"><span class="bt">Human</span><ul style="margin:0"><li>Deciding whether a finding is right.</li><li>Approving or rejecting each warning.</li><li>Changing a square's priority.</li><li>Asking for a re-run.</li><li>Configuring a delivery channel (administrator).</li><li>Acting in the real world.</li></ul></div>
+  </div>
+
+  <h2>6.10 Clarity improvements made in this round</h2>
+  <div class="box change"><span class="bt">Changed on 8 November 2026</span>
+    <ul style="margin:0">
+      <li>The To review page opens with "How reviewing works": four cards, each stating what the item is, why it appears, what to do and what happens next.</li>
+      <li>One consistent vocabulary: "finding to double-check" (previously also "unsure finding" and "check a square"), "note", "needs a person", "stopped". Each finding's label says why it exists ("raised by a safety check" or "high-priority square, weak evidence").</li>
+      <li>The result's tab "Needs your OK" is now "To review", matching the navigation; the waiting box counts findings and warnings separately and states that nothing is sent until a person decides.</li>
+      <li>"Things to keep in mind" became "Safety-check notes", with each note marked "note" or "needs a person".</li>
+      <li>The Approve button states what will really happen on this server: it reads the delivery setting from the server, so it says "no delivery channel is set up, so the warning stays inside AegisEO" here.</li>
+      <li>Corrections made on earlier checks of the same area are now shown on the new result (previously only in the specialist record).</li>
+    </ul>
+  </div>
+</section>

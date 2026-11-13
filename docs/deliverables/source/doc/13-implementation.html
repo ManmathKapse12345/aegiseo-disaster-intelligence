@@ -1,0 +1,125 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 13</span>Important implementation concepts, with code</h1>
+  <p class="lead">This chapter explains the ideas that make AegisEO work, each with a short excerpt of the real code (shortened only where marked with ...). The aim is to understand the design, not to read the program line by line.</p>
+
+  <h2>13.1 The common grid and the pixel budget</h2>
+  <p>Every check starts by building one grid in the UTM zone of the area. If the area would need more than the pixel budget, the pixel size grows in 10 m steps until it fits. This one loop is the origin of the "30 m above about 1,040 km²" behaviour of Chapter 7.</p>
+<pre><code><span class="c"># backend/aegis/geo/grid.py - Grid.for_aoi (shortened)</span>
+res = float(resolution_m)                       <span class="c"># 20 m unless the user changed it</span>
+while True:
+    x0, y1 = math.floor(minx / res) * res, math.ceil(maxy / res) * res
+    x1, y0 = math.ceil(maxx / res) * res, math.floor(miny / res) * res
+    w, h = int(round((x1 - x0) / res)), int(round((y1 - y0) / res))
+    if w * h &lt;= max_pixels:                     <span class="c"># 2,600,000 by default</span>
+        break
+    res = math.ceil(res * math.sqrt((w * h) / max_pixels) / 10.0) * 10.0</code></pre>
+
+  <h2>13.2 The flood model: two branches and a gate</h2>
+  <figure>
+    <div class="diagram" data-diagram="fusion"></div>
+    <figcaption><b>Figure 13.1</b> The gated-fusion U-Net (<code>backend/aegis/ml/models.py</code>) and the radar-specialist hybrid (<code>backend/aegis/ml/inference.py</code>).</figcaption>
+  </figure>
+  <p>A simple way to use two sensors is to stack all their bands as one input (<i>early fusion</i>). AegisEO's model instead has two separate <b>encoders</b>, one for radar and one for optical, and joins their features at each of four scales with a <b>gate</b>: a small learned network that outputs, for every pixel, a number g between 0 and 1 saying how much to rely on radar. The gate also receives each sensor's <i>validity mask</i> (1 where the sensor has a usable observation, 0 under cloud or outside the image), and two hard rules are built into the formula: where the optical image is invalid only radar is used, and where radar is invalid only optical is used. The network therefore cannot "hallucinate" from cloudy optical pixels.</p>
+<pre><code><span class="c"># backend/aegis/ml/models.py - GatedFusion.forward</span>
+both = torch.cat([f_sar, f_opt], dim=1)
+g = torch.sigmoid(self.gate(torch.cat([both, v_sar, v_opt], dim=1)))  <span class="c"># learned reliance on radar, 0..1</span>
+g_eff = v_sar * (g * v_opt + (1.0 - v_opt))  <span class="c"># no optical: radar only; no radar: optical only</span>
+fused = g_eff * f_sar + (1.0 - g_eff) * f_opt + (v_sar * v_opt) * self.joint(both)
+return fused, g_eff</code></pre>
+  <p>The finest-scale gate is returned as the "Radar or optical?" map layer, so a user can see which sensor the model relied on. Version 2 of the model (the one deployed) was trained with strong <i>sensor dropout</i>: in 30% of training examples the optical input was removed entirely and in 10% the radar, and simulated clouds covered up to 100% of the optical image, forcing the network to cope with missing sensors. It has 1,185,973 parameters and trained for 40 passes over the data (<i>epochs</i>), keeping the version from epoch 30, which scored best on the validation set, in about 17 minutes.</p>
+  <p>One further difference between training and use had to be bridged. The training images are Sentinel-2 Level-1C (reflectance at the top of the atmosphere) and Sentinel-1 sigma-nought backscatter, whereas AegisEO reads Level-2A surface reflectance and terrain-corrected gamma-nought. The radar values are converted to sigma-nought with a fixed −1.1 dB (the factor for an incidence angle of about 39°), and during training the brightness of the inputs was varied at random (±10% gain and ±0.02 offset per optical band, ±1.5 dB for radar), so that the model tolerates the remaining difference. Safety check G11 flags areas whose inputs still look unusual (<code>docs/data.md</code>, <code>docs/failure_analysis.md</code>).</p>
+  <p>Where only radar observed a pixel (for example under total cloud), the deployed system blends in the output of a separate radar-only U-Net, the "specialist", which performed better than the fusion model in that situation on validation data. This combination, called the <i>hybrid</i>, was selected automatically by <code>python -m aegis.ml.evaluate</code> as the configuration with the best average IoU across four conditions (both sensors, 50% cloud, no optical, no radar) on the <b>validation</b> split, so the test and Bolivia results remain unbiased (<code>models/selection.json</code>).</p>
+
+  <h2>13.3 Calibrated probability and uncertainty</h2>
+  <p>During use, the model runs on overlapping tiles of the area. For each tile, the last layer is evaluated several times with different random channels switched off (Monte-Carlo dropout), each output is divided by the temperature T (calibration) and turned into a probability with the <dfn>sigmoid</dfn> function (which maps any number to the range 0-1). The mean of the passes is the probability; the spread is the uncertainty. The random switches come from a generator seeded per tile, so the same input always gives the same result.</p>
+<pre><code><span class="c"># backend/aegis/ml/inference.py - WaterSegmenter._predict_model (shortened)</span>
+gen = torch.Generator(device=feats.device)
+gen.manual_seed(1_000_003 + ti)                        <span class="c"># reproducible per tile</span>
+keep = (torch.rand((mc, feats.shape[1], 1, 1), generator=gen, device=feats.device) &gt;= p_drop).float()
+pst = torch.sigmoid(head(feats * keep / (1.0 - p_drop)).float() / self.temperature)[:, 0]
+...
+pm = pst.mean(0).cpu().numpy()                         <span class="c"># probability (mean of the passes)</span>
+p2 = (pst**2).mean(0).cpu().numpy()                    <span class="c"># for the spread: std = sqrt(E[p^2] - E[p]^2)</span></code></pre>
+
+  <h2>13.4 From probabilities to new water</h2>
+<pre><code><span class="c"># backend/aegis/analysis/hazards.py - detect_flood (shortened)</span>
+p_flood = p_post * (1.0 - np.nan_to_num(p_pre, nan=0.0))     <span class="c"># new water = water now AND not before</span>
+if permanent is not None:
+    p_flood = np.where(permanent, 0.0, p_flood)               <span class="c"># JRC occurrence &gt;= 80 %: never flooding</span>
+...
+implausible = (np.nan_to_num(hand) &gt; p.max_hand_m) | (np.nan_to_num(slope) &gt; p.max_slope_deg)  <span class="c"># 15 m, 8 degrees</span>
+...
+candidate = (np.nan_to_num(p_flood) &gt;= p.prob_threshold) &amp; aoi   <span class="c"># 0.5 by default (user setting)</span>
+terrain_suppressed = candidate &amp; implausible
+detected = clean_mask(candidate &amp; ~implausible, _mmu_pixels(p.min_mapping_unit_ha, g.resolution))</code></pre>
+  <p>The uncertainty of P(flood) combines the uncertainty of both predictions, and the cross-check (radar drop of 3 dB or more, or MNDWI turning positive) yields the agreement percentage used by safety check G13.</p>
+
+  <h2>13.5 Safety checks as small, testable functions</h2>
+<pre><code><span class="c"># backend/aegis/agents/guardrails.py - part of check_perception</span>
+EXTENT_FRACTION_ESCALATE = 0.60
+UNCERTAINTY_ESCALATE = 0.15
+AGREEMENT_ESCALATE = 0.55
+...
+out.append(GuardrailResult("G12", "Plausibility of detected extent", "perception",
+           "escalate" if frac &gt; EXTENT_FRACTION_ESCALATE else "pass", ...))</code></pre>
+  <p>Each guardrail returns a <code>GuardrailResult</code> with a code, outcome, message, measured value and threshold. The orchestrator records every result and turns "warn" into a note and "escalate" into a finding. Because the thresholds are constants and the functions take plain values, each one is unit-tested directly (<code>backend/tests/test_guardrails_tools.py</code>).</p>
+
+  <h2>13.6 The tool executor: the agent cannot act on the world alone</h2>
+<pre><code><span class="c"># backend/aegis/agents/tools.py - ToolExecutor.call (shortened)</span>
+tool = self.tools.get(name)
+if tool is None:                                                  <span class="c"># not on the allow-list</span>
+    raise ToolBlockedError(f"tool {name!r} is not registered")
+if tool.side_effect not in self.policy.allowed and not (tool.side_effect == SideEffect.EXTERNAL and approval):
+    raise ToolBlockedError(f"tool {name!r} requires human approval")  <span class="c"># external effects need a person</span>
+if self.stats.calls &gt; self.policy.max_calls:                     <span class="c"># 120 calls per check</span>
+    raise ToolBlockedError("tool-call budget exhausted")
+self.recorder.check_cancel()                                      <span class="c"># cooperative Stop</span>
+value = tool.fn(**kwargs)                                         <span class="c"># every call is timed and recorded</span></code></pre>
+  <p>The default policy allows only <i>read_only</i>, <i>compute</i> and <i>write_draft</i> tools. The only <i>external</i> tool, <code>publish_alert</code>, can run only when an <code>approval</code> value is passed, and only the human approval route (<code>decide_alert</code> in <code>actions.py</code>) passes one: the approver's name.</p>
+
+  <h2>13.7 The priority score</h2>
+<pre><code><span class="c"># backend/aegis/analysis/prioritize.py (shortened)</span>
+def _score(h, e, alpha):
+    return 100.0 * np.power(np.clip(h, 0, 1), alpha) * np.power(np.clip(e, 0, 1), 1 - alpha)
+
+cat = category_for(score, cfg.thresholds)                  <span class="c"># Critical &gt;= 70, High &gt;= 50, Moderate &gt;= 30</span>
+floor_applied = False
+life_safety_inside = [f for f in cell["facilities"] if f["category"] in LIFE_SAFETY and f["status"] == "inside"]
+if life_safety_inside and cell["mean_confidence"] &gt;= 0.6 and cat in ("Moderate", "Low"):
+    cat, floor_applied = "High", True                       <span class="c"># life-safety rule</span>
+...
+"needs_verification": conf_level == "Low" and cat in ("Critical", "High"),   <span class="c"># becomes a finding</span></code></pre>
+
+  <h2>13.8 How the interface and the server stay consistent (new)</h2>
+  <p>A new endpoint returns the server's limits and switches, and a small hook makes them available to every component. The wizard, the area picker, the date checks and the Approve button all read from it, so they can never contradict the server.</p>
+<pre><code><span class="c"># backend/aegis/api/routes_system.py (shortened)</span>
+@router.get("/api/config")
+def public_config():
+    s = get_settings()
+    return {"limits": {"min_aoi_km2": s.min_aoi_km2, "max_aoi_km2": s.max_aoi_km2,
+                       "full_detail_max_km2": round(s.max_grid_pixels * s.default_resolution_m ** 2 / 1e6),
+                       "max_window_days": MAX_WINDOW_DAYS, ...},
+            "features": {"alert_delivery": bool(s.alert_webhook_url.get_secret_value()), ...}}
+
+<span class="c">// frontend/src/lib/limits.ts (shortened)</span>
+export function useLimits(): Limits {
+  const l = useConfig().data?.limits;              <span class="c">// GET /api/config, cached for the session</span>
+  return useMemo(() =&gt; (l ? { maxKm2: l.max_aoi_km2, ... } : DEFAULT_LIMITS), [l]);
+}</code></pre>
+
+  <h2>13.9 Polling a running check</h2>
+<pre><code><span class="c">// frontend/src/api/hooks.ts</span>
+export const useAnalysis = (id: string) =&gt;
+  useQuery({
+    queryKey: ["analysis", id],
+    queryFn: () =&gt; api&lt;AnalysisDetail&gt;(`/api/analyses/${id}`),
+    refetchInterval: (query) =&gt; (query.state.data &amp;&amp; ACTIVE.has(query.state.data.status) ? 2000 : false),
+  });</code></pre>
+  <p>While the check is <i>queued</i> or <i>running</i>, the result page asks again every 2 seconds; once it has finished, polling stops and the map, squares and places are loaded.</p>
+
+  <h2>13.10 The expandable map (new)</h2>
+  <p>The map is never re-created when it is expanded, so zoom, layers and the selected square are kept. A CSS class fixes the map's container to the whole window (above the top bar, below dialogs), the page behind is prevented from scrolling, and Escape returns to normal size. The map library notices the new size on its own. One subtle bug had to be fixed for this to work: the pages' entrance animations kept a final <code>transform</code> after they finished, and in CSS any ancestor with a transform becomes the reference box for <code>position: fixed</code>, which would have trapped the "full-window" map inside the page. The animations now use <code>animation-fill-mode: backwards</code>, which leaves nothing behind once they end.</p>
+<pre><code><span class="c">/* frontend/src/styles/global.css */</span>
+.map-frame.map-expanded { position: fixed !important; inset: 0 !important; z-index: 80; ... }
+body.map-is-expanded { overflow: hidden; }</code></pre>
+</section>

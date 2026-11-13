@@ -1,0 +1,40 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 16</span>Possible future work</h1>
+  <p class="lead">Everything in this chapter is a proposal. None of it exists in AegisEO today, and none of it is shown in the screenshots or claimed elsewhere in this report. Each proposal starts from a limitation described in Chapter 14.</p>
+  <div class="box limit"><span class="bt">Not implemented</span>The items below are ideas for later versions. When presenting the project, describe them as future work, not as features.</div>
+
+  <h2>16.1 Small engineering improvements</h2>
+  <table class="compact">
+    <thead><tr><th style="width:32%">Today</th><th>Possible improvement</th></tr></thead>
+    <tbody>
+      <tr><td>The setting <code>run_timeout_s</code> exists but is not enforced.</td><td>Stop a check that exceeds it, with the status "failed" and a plain reason, so a hanging external service can never keep a worker busy indefinitely.</td></tr>
+      <tr><td>Checks run in two worker threads inside one server process.</td><td>A shared job queue (for example a database-backed queue or a message broker) so that several servers could share the work and a restart would never interrupt a check.</td></tr>
+      <tr><td>A user who wants to cover more than 1,500 km² splits the region by hand.</td><td>Split a large region automatically into tiles, run them as separate checks and merge the squares into one ranked list.</td></tr>
+      <tr><td>The Claude status check only reads the configuration.</td><td>A real, minimal request to the service, like the other status checks.</td></tr>
+      <tr><td>The free Hugging Face deployment loses its data when it restarts.</td><td>Persistent storage, or the existing Oracle Cloud deployment with PostgreSQL for anything beyond a demonstration.</td></tr>
+      <tr><td>Approved warnings can go to one webhook.</td><td>Further channels (email, SMS gateways, the formats used by humanitarian information systems), always after approval by a named person, exactly as today.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>16.2 Better detection methods</h2>
+  <ul>
+    <li><b>Evaluate wildfire and landslide methods against expert maps.</b> Today only the flood method is trained and evaluated. Public burn-severity maps and landslide inventories could give the same kind of accuracy table as Section 14.3, or training data for learned models.</li>
+    <li><b>Use a series of earlier radar images as the baseline.</b> Today one "before" image is compared with one "after" image. The typical value and spread of each pixel over several months would separate a real flood from seasonal wetness more reliably, and would reduce G06 warnings.</li>
+    <li><b>Flooded towns and vegetation.</b> Water between buildings and under trees makes radar brighter, not darker. Methods that look for this effect, or that use radar <i>coherence</i> (how similar two radar passes are in fine detail), could add these areas, which AegisEO currently misses.</li>
+    <li><b>Flood depth.</b> Combining the flood edge with the terrain height (Copernicus DEM, already used) would allow a rough water-depth estimate, which matters for rescue planning.</li>
+    <li><b>Wider training data.</b> The flood model learned from 10 flood events (the 11th event of the dataset, Bolivia, was kept aside entirely for testing). Training on more regions, especially dry ones like Sindh where G11 found unusual data, would make such results more confident and reduce the number of reviews.</li>
+    <li><b>More satellites.</b> Adding other free missions (for example Landsat for optical images, or newer radar missions as their data become openly available) would shorten the waiting time for the first "after" image, the main limitation for fast-draining floods such as Derna.</li>
+  </ul>
+
+  <h2>16.3 Better exposure information</h2>
+  <ul>
+    <li><b>Building footprints</b> from open datasets would allow counting buildings in the flooded area, a more direct measure than population grids from 2015-2020.</li>
+    <li><b>Up-to-date population</b> (for example seasonal or daytime population) would make "people potentially exposed" closer to the real situation, especially in areas with many temporary residents.</li>
+  </ul>
+
+  <h2>16.4 Learning from the people who review</h2>
+  <p>Today, decisions of reviewers are stored with their names and recalled in later checks of the same area: they appear as a note and a warning, so the next person knows that someone corrected an earlier result. They do not change the detection, and the model is never retrained automatically. A possible next step is to collect the "It's wrong" decisions and priority changes into a reviewed dataset, and to use it, after checking by a specialist, to retrain or recalibrate the model. This must stay a deliberate, human-checked process: automatic retraining from individual clicks could quietly make the model worse.</p>
+
+  <h2>16.5 Studies with real users</h2>
+  <p>The wording and the guided wizard were designed for people without remote-sensing knowledge, but they have not been tested with emergency responders. A small study (for example asking responders to find the most urgent places and explain the confidence of a result, and measuring success and time) would show which explanations work and which do not.</p>
+</section>

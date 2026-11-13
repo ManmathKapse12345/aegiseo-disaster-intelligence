@@ -35,8 +35,8 @@ export function accuracyHeadline(model: Json | undefined): AccuracyHeadline | nu
 /** Method names in plain words (ids from backend/aegis/ml/evaluate.py). */
 export const METHOD_NAMES: Record<string, string> = {
   otsu_vh: "Simple radar rule (VH)", otsu_vv: "Simple radar rule (VV)", mndwi: "Simple water-colour rule", rule_fusion: "Simple combined rule",
-  s1_unet: "Radar-only model", s2_unet: "Camera-only model", early_fusion_unet: "Combined model (basic)", gated_fusion_unet: "Combined model v1",
+  s1_unet: "Radar-only model", s2_unet: "Optical-only model", early_fusion_unet: "Combined model (basic)", gated_fusion_unet: "Combined model v1",
   gated_fusion_unet_v2: "Combined model v2", "hybrid_gated_fusion_unet+s1_unet": "Combined v1 + radar helper",
   "hybrid_gated_fusion_unet_v2+s1_unet": "Combined v2 + radar helper",
 };
-export const CONDITIONS: [string, string][] = [["as_is", "Normal photos"], ["cloud_50", "Half hidden by cloud"], ["no_s2", "No camera photos"], ["no_s1", "No radar photos"]];
+export const CONDITIONS: [string, string][] = [["as_is", "Both image types"], ["cloud_50", "Half hidden by cloud"], ["no_s2", "No optical images"], ["no_s1", "No radar images"]];

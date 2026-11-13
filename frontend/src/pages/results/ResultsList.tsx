@@ -102,4 +102,4 @@ function Row({ a }: { a: AnalysisBrief }) {
   );
 }
 
-const STATUS_LINE = (a: AnalysisBrief) => (a.status === "insufficient_data" ? "No usable photos found" : a.status === "queued" ? "Waiting to start" : "No result");
+const STATUS_LINE = (a: AnalysisBrief) => (a.status === "insufficient_data" ? "No usable images found" : a.status === "queued" ? "Waiting to start" : "No result");

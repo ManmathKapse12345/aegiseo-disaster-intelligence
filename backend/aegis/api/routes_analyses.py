@@ -69,7 +69,7 @@ def analysis_brief(a: Analysis) -> dict[str, Any]:
 @router.post("", status_code=201)
 def create_analysis(body: AnalysisCreate, s: Session = Depends(get_db), who: Identity = Depends(require("analyst"))) -> dict[str, Any]:
     settings = get_settings()
-    params: dict[str, Any] = {"resolution_m": body.resolution_m}
+    params: dict[str, Any] = {"resolution_m": body.resolution_m or settings.default_resolution_m}
     synthetic = body.synthetic
     if body.scenario_id:
         sc = get_scenario(body.scenario_id)

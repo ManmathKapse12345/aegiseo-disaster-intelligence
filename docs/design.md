@@ -17,11 +17,16 @@ the vocabulary in `frontend/src/lib/meta.tsx` and the plain-language text engine
    guide panel that explains the current step, recaps every choice with a *Change* link and says
    what happens next. Choices are pre-filled from case studies and live alerts; validation
    messages say how to fix the problem.
-3. **Plain words, true words.** Copy is written for a curious 12-year-old but never changes the
-   meaning: each phrase in `meta.tsx` / `plain.ts` was checked against the backend code that
-   produces the value. Exposure is never called impact ("people living there - not people hurt").
+3. **Plain words, true words.** Copy is written for a beginner but never changes the meaning:
+   each phrase in `meta.tsx` / `plain.ts` was checked against the backend code that produces the
+   value. Exposure is never called impact ("people living there - not people hurt"). No metaphors
+   ("satellite eyes", "radar photo"): the technically correct term is used and explained where it
+   first appears - *radar image (Sentinel-1)*, *optical image (Sentinel-2)*, *pixel*, *the model*.
+   Limits shown in the UI (largest area, longest search) come from the server (`GET /api/config`),
+   never from a copy in the frontend.
 4. **Progressive disclosure.** Technical detail (method, model version, guardrail codes, the full
-   agent trace, expert settings) sits behind `<details>` disclosures, never in the way.
+   agent trace, detection and ranking settings) sits behind `<details>` disclosures, never in the
+   way - but every setting carries a visible explanation and its default when opened.
 5. **Only working controls.** Settings appear only when the chosen method uses them (e.g. the
    flood probability threshold is hidden for wildfires, which use a dNBR threshold instead).
 6. **Evidence and uncertainty stay visible.** Confidence is explained in words, safety-check notes
@@ -37,15 +42,19 @@ the vocabulary in `frontend/src/lib/meta.tsx` and the plain-language text engine
 | Analysis | A *check*; finished checks are *results* |
 | AOI / bounding box | *Area* (with a size picture: "like a square about 15 km on each side") |
 | Hazard | *Kind of disaster* (Flood, Wildfire, Landslide) |
-| Pre / post-event window | *'Before' / 'after' photo search* |
-| Sentinel-1 SAR / Sentinel-2 optical | *Radar photo* / *camera photo* |
+| Pre / post-event window | *'Before' / 'after' image search* (a date range; at most 120 days) |
+| Sentinel-1 SAR / Sentinel-2 optical | *Radar image (Sentinel-1)* / *optical image (Sentinel-2)* |
+| Pixel / grid resolution | *Pixel* / *pixel size* (20 m by default) |
+| Deep model / MC dropout uncertainty | *The model* / *model uncertainty* |
 | Response cell | *Priority square* |
 | Exposure / potentially exposed | *People living there (an estimate - not people hurt)* |
 | Critical facilities | *Important places* (hospitals, schools, emergency services...) |
 | Settlements | *Villages and towns* (drawn separately from important places) |
-| Escalation / HITL review task | *Needs a person to check*; *unsure finding* |
-| Alert | *Draft warning* (only sent after a person approves it) |
+| Escalation / HITL review task | *Finding to double-check* (the check's status: *Needs a person to check*) |
+| Alert | *Draft warning* (approved or rejected by a named person; sent only if a delivery channel is set up) |
 | Guardrail | *Safety check* (plain title + why, with the code in the technical detail) |
+| Guardrail outcomes pass / warn / escalate / block | *passed* / *note* / *needs a person* / *stopped* |
+| Expert settings | *Detection and ranking settings* |
 | Synthetic / simulated | *Practice data* / *practice run* |
 | IoU | *Overlap* (explained where it is shown) |
 

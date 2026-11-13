@@ -1,0 +1,56 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 12</span>Data sources: what is real, how it is fetched and how to verify it</h1>
+  <p class="lead">The most important question about a data-driven project is "is this real?". This chapter answers it for every source: what it provides, who provides it, how AegisEO requests it, whether it is live, cached or fixed, whether credentials are involved, how it is processed, whether it worked on 8 November 2026, and how anyone can verify it.</p>
+
+  <h2>12.1 From the archive to the screen</h2>
+  <figure>
+    <div class="diagram" data-diagram="dataflow"></div>
+    <figcaption><b>Figure 12.1</b> The path of the data through one check (<code>agents/specialists.py</code>, <code>sources/stac.py</code>, <code>sources/imagery.py</code>, <code>geo/grid.py</code>, <code>analysis/</code>, <code>reports/</code>).</figcaption>
+  </figure>
+
+  <h2>12.2 Source by source</h2>
+  <table class="compact">
+    <thead><tr><th style="width:15%">Source (provider)</th><th style="width:23%">Provides; how requested</th><th style="width:16%">Live, cached or fixed; credentials</th><th style="width:24%">Processing before use</th><th style="width:22%">Status 8 Nov 2026; how to verify</th></tr></thead>
+    <tbody>
+      <tr><td><b>Sentinel-1 RTC</b> (ESA Copernicus, via Microsoft Planetary Computer)</td><td>Radar VV and VH backscatter, terrain-corrected. STAC search, then signed range reads of only the area's pixels.</td><td>Real archive (2014-), new passes within days. Windows cached as GeoTIFF. No account: free temporary SAS token.</td><td>Averaged in linear power while resampling to the grid, converted to dB, gamma-nought → sigma-nought (−1.1 dB), slices of one pass mosaicked; before/after from the same orbit.</td><td>Working; live integration test passed. Item IDs are listed in the record (e.g. <code>S1A_IW_GRDH_1SDV_20220827T133609_..._rtc</code>).</td></tr>
+      <tr><td><b>Sentinel-2 L2A</b> (same)</td><td>Optical surface reflectance (6 bands used) and scene classification. Same method.</td><td>Real archive (2015-), new scenes within about a day. Cached. No account.</td><td>Offset of −1000 for processing baseline 04.00 and later, scaled to reflectance; reprocessed duplicates removed; tiles mosaicked; clouds, shadows and no-data masked with the SCL; cloud measured over the exact area.</td><td>Working. Item IDs listed (e.g. <code>S2A_MSIL2A_20220831T055651_R091_T42RUQ_...</code>).</td></tr>
+      <tr><td><b>Copernicus DEM GLO-30, JRC Global Surface Water, ESA WorldCover 2021</b> (via Planetary Computer)</td><td>Height; long-term water occurrence; land cover. Same STAC method.</td><td>Fixed reference datasets. Cached. No account.</td><td>Height resampled bilinearly (slope, height above drainage); occurrence (missing = 0%), ≥ 80% = permanent; land cover by majority.</td><td>Working.</td></tr>
+      <tr><td><b>HRSL population</b> (Meta and CIESIN, on AWS Open Data)</td><td>People per ~30 m cell. Window read from public cloud-optimised files.</td><td>Fixed estimate (2015-2020 depending on country). Cached per grid. No account.</td><td>Counts → density (latitude-dependent cell area) → averaged onto the grid → counts, conserving totals.</td><td>Working.</td></tr>
+      <tr><td><b>WorldPop</b> (University of Southampton)</td><td>Total population of the area for 2020. HTTP GET to its statistics API with the area as GeoJSON.</td><td>Fixed estimate. Cached 30 days. No account.</td><td>Reported beside the HRSL total; used for the fallback when HRSL has no data.</td><td>Working.</td></tr>
+      <tr><td><b>OpenStreetMap via Overpass</b> (OSM contributors; three public servers)</td><td>Hospitals, clinics, schools, emergency services, shelters, utilities, settlements, main roads. HTTP POST with an Overpass query for the box.</td><td>Live volunteer map. Cached 24 hours. No account; public rate limits.</td><td>Categorised conservatively (bus shelters are not shelters); distance to the detected area: inside, within 500 m, outside; road length per square.</td><td>First server timed out at the moment of the status check ("partly working"); requests succeeded in both test runs that day.</td></tr>
+      <tr><td><b>Nominatim</b> (OpenStreetMap Foundation)</td><td>Place-name search for the wizard. HTTP GET by the server.</td><td>Live. Cached 7 days. At most 1 request per second (usage policy).</td><td>Name, region, point and bounding box.</td><td>Working.</td></tr>
+      <tr><td><b>GDACS</b> (EC JRC and UN OCHA)</td><td>Current disaster alerts with alert levels. HTTP GET of the event list.</td><td>Near-real-time. Cached 10-15 minutes.</td><td>Point locations and types; only floods, cyclones and wildfires can start a check.</td><td>Working (100 events in the last 3 days).</td></tr>
+      <tr><td><b>USGS earthquakes</b></td><td>Earthquakes M4.5+ of the last 7 days (M5.5+ shown). GeoJSON feed.</td><td>Real time. Cached 10 minutes.</td><td>Shown for context only.</td><td>Working (89 events).</td></tr>
+      <tr><td><b>NASA FIRMS</b></td><td>Active-fire detections (VIIRS, 375 m). Public 7-day CSV file; older dates need a key.</td><td>Near-real-time. Cached 3 hours. Key <code>AEGIS_FIRMS_MAP_KEY</code> optional, not set here.</td><td>Fires within 750 m of a detected burn are counted as corroboration.</td><td>Working (file updated 10:40 UTC). Historical fires unavailable without a key.</td></tr>
+      <tr><td><b>Open-Meteo</b> (ERA5 reanalysis)</td><td>Daily rainfall at the area's centre. HTTP GET to the archive API.</td><td>Historical, about 5 days behind. Cached 12 hours.</td><td>Total and peak day; chart under "How we know".</td><td>Working.</td></tr>
+      <tr><td><b>Sen1Floods11</b> (Cloud to Street)</td><td>Expert-labelled flood images for training. Downloaded once by a script.</td><td>Fixed training data; not used during checks.</td><td>Prepared into arrays; statistics from the training split only.</td><td>Not contacted at run time.</td></tr>
+      <tr><td><b>Claude API</b> (Anthropic, optional)</td><td>Wording of the executive summary from verified facts.</td><td>Needs <code>AEGIS_ANTHROPIC_API_KEY</code>; not set here.</td><td>Accepted only if every number and citation passes G16/G17.</td><td>Not configured; templates are used.</td></tr>
+      <tr><td><b>Background maps</b> (OpenFreeMap; EOX Sentinel-2 cloudless 2020)</td><td>Map tiles loaded directly by the browser.</td><td>Live tile services; no key.</td><td>Display only; never used in calculations.</td><td>Working (visible in all screenshots).</td></tr>
+    </tbody>
+  </table>
+  <div class="box limit"><span class="bt">Honesty correction made in this round</span>The Data sources page's "Working" label is now always the result of contacting the service. Before, the NASA FIRMS entry was reported as working without any request (it now sends a light HTTP HEAD request and shows when the file was last updated), and four checks (GDACS, USGS, Open-Meteo, WorldPop) could be answered from a cached copy up to 12 hours (Open-Meteo) or 30 days (WorldPop) old. Health checks now bypass the cache. The optional Claude entry still only reports whether a key is configured; its explanation now says so.</div>
+
+  <h2>12.3 What is real, what is derived, what is simulated, what is fixed text</h2>
+  <table class="compact">
+    <thead><tr><th style="width:24%">Kind</th><th>Examples in AegisEO</th><th style="width:28%">How it is labelled</th></tr></thead>
+    <tbody>
+      <tr><td><b>Real observations</b></td><td>Sentinel-1 and -2 images; GDACS, USGS and FIRMS alerts; rainfall; OpenStreetMap features.</td><td>Dates, image identifiers and sources shown under "How we know" and in the record.</td></tr>
+      <tr><td><b>Real but fixed estimates</b></td><td>Population grids (2015-2020), DEM, JRC water, WorldCover (2021).</td><td>"An estimate"; source and year shown.</td></tr>
+      <tr><td><b>Derived by AegisEO</b></td><td>Probabilities, detected areas, uncertainty, people potentially exposed, scores, confidence, written summaries.</td><td>Computed values; every number traceable to a fact in the record.</td></tr>
+      <tr><td><b>Simulated</b></td><td>Practice runs and the benchmark's 12 scenarios (made-up scenes at 0° N 0° E).</td><td>Violet "Practice data" chip and banner everywhere; "[SIMULATED]" in warning titles; never publishable (G18).</td></tr>
+      <tr><td><b>Fixed files in the repository</b></td><td>Model accuracy (<code>models/evaluation.json</code>, produced offline by the evaluation script); the case studies' places, dates and descriptions (<code>scenarios.py</code>); the method knowledge base; the four explainer images (rendered once from a real Sindh run by <code>scripts/make_explainer_images.py</code>) and case-study pictures (credited in <code>public/images/credits.json</code>).</td><td>Shown as test results, case-study text and illustrations; not live data.</td></tr>
+    </tbody>
+  </table>
+  <p>Nothing in AegisEO invents data for a real check: if a source fails, the missing factor is marked missing, confidence is lowered and the result says so.</p>
+
+  <h2>12.4 How a reader can verify the results</h2>
+  <ol>
+    <li><b>Check the images exist.</b> Under "How we know → Full step-by-step record → Evidence and facts", every image used is listed with a link to its record in the Planetary Computer catalogue (for example <code>https://planetarycomputer.microsoft.com/api/stac/v1/collections/sentinel-1-rtc/items/S1A_IW_GRDH_1SDV_20220827T133609_20220827T133634_044739_055782_rtc</code>). The same images can be found in the Planetary Computer Explorer website by place and date.</li>
+    <li><b>Look at the change yourself.</b> "Compare before / after" on the map shows the real optical images on either side of the slider; the radar images are available as layers.</li>
+    <li><b>Search the archive live.</b> Step 3's "Check which satellite images exist" lists the passes for any place and dates without starting a check.</li>
+    <li><b>Check facilities.</b> Clicking a hospital on the map shows its name; the same object can be found on openstreetmap.org.</li>
+    <li><b>Check live alerts</b> on gdacs.org.</li>
+    <li><b>Re-check every source</b> with "Check them all again" on the Data sources page.</li>
+    <li><b>Reproduce the accuracy numbers</b> with <code>python -m aegis.ml.evaluate</code> after downloading Sen1Floods11, and the agent benchmark with <code>python -m aegis.benchmark</code> (re-run for this report: 12/12 scenarios and 8/8 probes passed).</li>
+  </ol>
+</section>

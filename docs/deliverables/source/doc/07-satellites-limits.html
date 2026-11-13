@@ -1,0 +1,107 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 7</span>Satellite passes, search periods and the area limit</h1>
+  <p class="lead">Two questions come up in every demonstration: "why was no 'after' image found?" and "why can I not check a bigger area?". This chapter answers both from the code and from measured runs.</p>
+
+  <h2>7.1 How AegisEO searches for and chooses images</h2>
+  <p>Every check has two date ranges, the 'before' search and the 'after' search (Section 4.5). For a case study they are fixed by hand; otherwise they are suggested from the event date by <code>default_windows</code> in <code>backend/aegis/jobs.py</code>: the 'before' search covers the 45 days before the event, and the 'after' search covers the event day and up to 12 days after it (never beyond today). For each satellite type, the data-acquisition agent (<code>DataAcquisitionAgent</code> in <code>backend/aegis/agents/specialists.py</code>) then:</p>
+  <ol>
+    <li><b>Searches the STAC catalogue</b> of Planetary Computer for all images intersecting the area within the range. For optical images, scenes with 80% or more cloud over the whole satellite tile are excluded already in the search.</li>
+    <li><b>Groups the results into passes.</b> One satellite pass can be delivered as several files (tiles or slices); files from the same satellite, day, orbit number and direction are combined into one <i>acquisition</i>.</li>
+    <li><b>Keeps only passes that cover at least 50% of the area</b> (<code>MIN_COVERAGE</code>), so a pass that just clips the edge is ignored.</li>
+    <li><b>Chooses</b> with documented rules: for radar 'after', the <b>earliest</b> pass (rule P1: closest to the event, unaffected by cloud); for radar 'before', the latest pass from the <b>same relative orbit and direction</b> as the 'after' pass (rule P4), looking up to 24 extra days back if needed, so that both images share the same viewing angle; for optical, the three least cloudy candidates are examined and the cloud over the exact area is measured from the scene classification layer, then the clearest is chosen with a small penalty per day of distance (rule P2).</li>
+    <li><b>Extends the 'after' search automatically</b> if a satellite type has no usable pass at all: the end date is moved 7 days later, at most twice, and never past today (rule P3). Each decision is written to the record with its reason.</li>
+  </ol>
+  <figure>
+    <div class="diagram" data-diagram="revisit"></div>
+    <figcaption><b>Figure 7.1</b> Every usable pass found for the Sindh 2022 case study, from the agent's recorded searches (confirmed by a live archive search on 8 November 2026). Large circles mark the images actually used.</figcaption>
+  </figure>
+  <div class="box real"><span class="bt">Real example</span>In 2022 only Sentinel-1A was working (Sentinel-1B had failed in December 2021), so each radar track repeated every 12 days: 4, 16 and 28 June on track 42. A second, overlapping track added passes on 7 and 19 June and 1 July, so a radar image existed every 3 to 9 days. AegisEO used track 42 on 28 June (before) and 27 August (after), giving identical viewing geometry. Optical images existed every 2-3 days; the clearest were 27 June and 31 August (100% cloud-free over the area).</div>
+
+  <h2>7.2 Why an 'after' image may not exist</h2>
+  <ul>
+    <li><b>The satellite has not passed yet.</b> With one radar satellite, the same place is imaged every 12 days on a given track (6 days with two). For an event 3 days ago there may be no 'after' radar image at all. The wizard warns when the event is less than 3 days old.</li>
+    <li><b>The pass was not recorded or not delivered.</b> Satellite operators plan which regions are imaged on each pass, so not every theoretical pass becomes an image, and new images appear in the archive only after processing (typically within about a day for Sentinel-2 and within days for Sentinel-1 RTC).</li>
+    <li><b>The pass covers too little of the area</b> (less than half).</li>
+    <li><b>Clouds</b> hide the ground in optical images; for floods, radar still works, but for wildfires and landslides a clear optical pair is strongly preferred.</li>
+  </ul>
+  <p>If no usable 'after' image remains after the automatic extension, safety check G04 stops the check with the status "No usable images", and the result page suggests making the 'after' search longer.</p>
+
+  <h2>7.3 The rewritten search tip, sentence by sentence</h2>
+  <p>The old tip read: <i>"Tip: if no 'after' photo is found, make the 'after' search longer. Radar satellites pass every 6 to 12 days. Each search can be up to 120 days."</i> It was short but left a beginner guessing: what is a pass, why are there gaps, which end of the search to move, and would a longer search change the result? The new text (Figure 4.13) explains each point. Every statement was checked against the code:</p>
+  <table class="compact">
+    <thead><tr><th style="width:44%">Statement in the new text</th><th>Where it is true</th></tr></thead>
+    <tbody>
+      <tr><td>Make the 'after' search longer by moving its end date later.</td><td>The search covers [start, end]; only a later end adds dates after the event.</td></tr>
+      <tr><td>A satellite passes over the same place only after a set number of days (its revisit interval).</td><td>Orbit mechanics (Section 3.1); seen in the real dates of Figure 7.1.</td></tr>
+      <tr><td>Radar (Sentinel-1) usually images the same place every 6 to 12 days, depending on the year and the region.</td><td>The data-source registry (<code>sources/registry.py</code>): "6-12 day repeat per orbit"; one satellite 2022-2025, two before and after.</td></tr>
+      <tr><td>Optical (Sentinel-2) passes about every 5 days, but images are useful only without cloud.</td><td>Registry: "5-day revisit at the equator"; SCL cloud mask and G08.</td></tr>
+      <tr><td>Each search can be at most 120 days long.</td><td><code>MAX_WINDOW_DAYS = 120</code>, safety check G03; the interface reads it from the server.</td></tr>
+      <tr><td>A longer range does not replace an earlier radar image with a later one.</td><td>Rule P1 always takes the earliest radar pass.</td></tr>
+      <tr><td>If one image type has no usable image, AegisEO extends that type's end date by itself, 7 days at a time, at most twice, never past today.</td><td>Rule P3, <code>MAX_WINDOW_EXTENSIONS = 2</code>.</td></tr>
+      <tr><td>A later image is not always better: floodwater can drain away.</td><td>The Derna 2023 case study (0.03 km² found after the water drained).</td></tr>
+      <tr><td>These intervals are typical, not guaranteed; check which images really exist.</td><td>The "Check which satellite images exist" panel searches the live archive.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>7.4 The 120-day maximum and the 60-day gap</h2>
+  <p>The longest allowed search is 120 days, for both 'before' and 'after'. The limit is enforced in three places that agree: safety check G03 on the server (the request is rejected), the date validation in the wizard (Continue is disabled with an explanation), and the API endpoint <code>/api/config</code>, from which the wizard reads the number. A long search makes it likely that the chosen image is far from the event; very long ranges mainly add images that would not be chosen anyway. Separately, if the 'before' and 'after' images end up more than 60 days apart, safety check G06 records a note, because over many weeks crops grow and rivers change with the seasons, and these normal changes can look like flooding or damage. The Sindh case study shows this note (65 days between the optical images).</p>
+
+  <h2>7.5 The largest checkable area (1,500 km²)</h2>
+  <h3>What the limit is and where it is implemented</h3>
+  <p>The limit is an <b>application-level setting</b> of the server: <code>max_aoi_km2 = 1500.0</code> in <code>backend/aegis/config.py</code>, which an administrator can change with the environment variable <code>AEGIS_MAX_AOI_KM2</code>. (An <dfn>environment variable</dfn> is a named value given to a program when it starts, used here so settings can change without editing code.) It is enforced at four points:</p>
+  <table class="compact">
+    <thead><tr><th>Where</th><th>What happens above the limit</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /api/analyses</code> (routes_analyses.py) via <code>AOI.validate_size</code> (geo/aoi.py)</td><td>HTTP 400: "AOI is too large (1760 km2); maximum is 1500 km2 per analysis. Split the area into smaller analyses." (message observed in a test on 8 Nov 2026)</td></tr>
+      <tr><td><code>POST /api/catalog/preview</code> (routes_system.py)</td><td>The archive check refuses the area (HTTP 400).</td></tr>
+      <tr><td>Safety check G02 (guardrails.py)</td><td>The agent rejects the request before any tool runs.</td></tr>
+      <tr><td>The wizard (StepWhere, AoiPicker, draft.ts)</td><td>The size badge says "Too big: zoom in" and Continue is disabled with an explanation.</td></tr>
+    </tbody>
+  </table>
+  <p>It is <b>not</b> a restriction of the satellites or of the data provider: the STAC catalogue accepts any search box, and COG files can be read in windows of any size. It is a <b>processing and quality budget</b> chosen by the developer for a single computer.</p>
+
+  <h3>Why the limit exists: what grows with the area</h3>
+  <ol>
+    <li><b>Pixels and memory.</b> Every layer of a check (radar and optical before and after, height, water, land cover, population, probability, uncertainty) is held in memory on one common grid. To bound memory and run time, the grid may have at most 2.6 million pixels (<code>max_grid_pixels</code>). At the default 20 m pixel size that is about 1,040 km²; a larger area forces larger pixels, in 10 m steps (rule P0 in <code>Grid.for_aoi</code>, <code>backend/aegis/geo/grid.py</code>).</li>
+    <li><b>Detail.</b> Larger pixels lose narrow features. The flood model was trained on 10 m images; at 30 m and beyond the inputs differ further from what it learned.</li>
+    <li><b>Square size.</b> At most 900 squares are ranked (<code>max_cells</code> in prioritize.py), so squares grow from 1 km to 1.5 km above 900 km² and to 2 km above about 2,025 km², and each priority then describes a larger area.</li>
+    <li><b>Downloads.</b> Downloading is most of a first check's time; at a fixed pixel size, data grow with the area.</li>
+    <li><b>Public services.</b> The OpenStreetMap request asks the Overpass server to give up after 90 seconds or 128 MB. Large boxes over dense cities are the most likely to fail, in which case the check continues without infrastructure data and says so.</li>
+    <li><b>Shared capacity.</b> One server runs two checks at a time; very large checks would hold a worker for longer.</li>
+  </ol>
+  <table class="compact">
+    <thead><tr><th>Area (default 20 m request)</th><th>Pixel size used</th><th>Priority square size</th></tr></thead>
+    <tbody>
+      <tr><td>0.25 - 50 km²</td><td>20 m</td><td>0.5 km</td></tr>
+      <tr><td>50 - 900 km²</td><td>20 m</td><td>1 km</td></tr>
+      <tr><td>900 - about 1,040 km²</td><td>20 m</td><td>1.5 km</td></tr>
+      <tr><td>about 1,040 - 1,500 km² (current maximum)</td><td>30 m</td><td>1.5 km</td></tr>
+      <tr><td>above the limit (only if raised): 1,500 - 2,340 km²</td><td>30 m</td><td>1.5 km, then 2 km above 2,025 km²</td></tr>
+      <tr><td>2,340 - 4,160 km² (only if raised)</td><td>40 m</td><td>2 km and more</td></tr>
+    </tbody>
+  </table>
+  <p class="small">The pixel thresholds are approximate: the server grids the area's bounding box in UTM, which is slightly larger than the area itself.</p>
+
+  <h3>Measured consequences</h3>
+  <p>To check these consequences with real data rather than reasoning alone, two cold checks (empty image cache) of the Sindh 2022 flood were run on 8 November 2026 on a separate server instance, one on the 216 km² case-study area and one on a 1,450 km² area around it (just under the limit):</p>
+  <table class="compact">
+    <thead><tr><th></th><th class="num">Case-study area</th><th class="num">Near the limit</th></tr></thead>
+    <tbody>
+      <tr><td>Area</td><td class="num">216 km²</td><td class="num">1,450 km² (6.7×)</td></tr>
+      <tr><td>Pixel size chosen by rule P0</td><td class="num">20 m</td><td class="num">30 m</td></tr>
+      <tr><td>Grid size</td><td class="num">0.55 million pixels</td><td class="num">1.64 million pixels (3.0×)</td></tr>
+      <tr><td>Priority squares</td><td class="num">165 squares of 1 km</td><td class="num">612 squares of 1.5 km</td></tr>
+      <tr><td>Total time</td><td class="num">189 s</td><td class="num">225 s</td></tr>
+      <tr><td>of which image search and download</td><td class="num">141 s</td><td class="num">166 s</td></tr>
+      <tr><td>OpenStreetMap request</td><td class="num">36 s, succeeded</td><td class="num">29 s, succeeded</td></tr>
+      <tr><td>Newly flooded area found</td><td class="num">78.3 km²</td><td class="num">680 km²</td></tr>
+      <tr><td>People potentially exposed</td><td class="num">7,248</td><td class="num">44,778</td></tr>
+      <tr><td>Outcome</td><td class="num">needs review (G11), note G06</td><td class="num">needs review (G11), note G06</td></tr>
+    </tbody>
+  </table>
+  <p>The result is instructive. A 6.7 times larger area took only about 20% longer, because rule P0 switched to 30 m pixels and the grid grew only three-fold. The real price of a large area is therefore <b>less detail</b> (30 m pixels, 1.5 km squares), not waiting time, at least on a fast connection and in a rural area. (Run times vary with the network: the same 216 km² area took 625 s on 1 November.)</p>
+
+  <h3>Can the limit be changed?</h3>
+  <p>Yes, technically: an administrator can set <code>AEGIS_MAX_AOI_KM2</code>. Before this round of changes that would not have worked properly, because the web interface contained its own copy of the number (<code>MAX_KM2 = 1500</code> in <code>frontend/src/pages/check/draft.ts</code>): raising the server limit would have left the interface refusing larger areas, and lowering it would have let the interface accept areas the server then rejected. That copy has been removed; the interface now reads the limit from the new endpoint <code>GET /api/config</code>, together with the minimum area, the pixel budget, the area that keeps full detail, and the date limits.</p>
+  <div class="box key"><span class="bt">Decision</span>The default limit was kept at 1,500 km². Raising it would trade detail for coverage: above about 2,340 km² pixels would become 40 m, squares 2 km and more, Overpass requests over dense regions would fail more often, and the flood model would see inputs further from its 10 m training data. For a larger region, several checks of up to 1,500 km² give better results. The interface now explains this (Figure 4.9) and warns, for areas above about 1,040 km², that 30 m pixels will be used.</div>
+</section>

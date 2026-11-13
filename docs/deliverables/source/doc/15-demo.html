@@ -1,0 +1,56 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 15</span>Demonstration procedure</h1>
+  <p class="lead">This chapter describes a step-by-step procedure for demonstrating AegisEO in about 12 minutes: what to run, what each step shows, and how the system behaves if something goes wrong. Every step uses features described in Chapters 4 to 8.</p>
+
+  <h2>15.1 Preparation</h2>
+  <p><b>The day before:</b></p>
+  <ol>
+    <li>Start the two programs (Appendix A gives the full installation commands):
+<pre><code><span class="c"># terminal 1</span>
+cd backend
+.venv\Scripts\activate
+uvicorn aegis.main:app --port 8000
+<span class="c"># terminal 2</span>
+cd frontend
+npm run dev                <span class="c"># then open http://localhost:5173</span></code></pre></li>
+    <li><b>Run every real check you plan to show once, in advance.</b> A first check of an area takes about 3 to 10 minutes, mostly downloading images. The downloaded image windows are saved, so a repeat of the same check takes seconds (3 to 56 s in the measured runs). This turns a waiting period into a live demonstration.</li>
+    <li>Run one practice run as well. It needs no internet and finishes in under a minute.</li>
+    <li>Open <b>About → Where the data comes from</b> and press <b>Check them all again</b>, so you know in advance if a public service is down.</li>
+  </ol>
+  <p><b>Thirty minutes before:</b> start both programs; set the browser zoom to 100% and turn off notifications; open the finished Sindh check and practice run in separate tabs as a backup; keep the slides at hand in case the computer or network fails.</p>
+  <div class="box limit"><span class="bt">Keep secrets off the screen</span>The demonstration needs no keys or passwords: the optional Claude, FIRMS and webhook settings are not used. Do not open the <code>.env</code> file or a terminal that prints settings while the screen is shared.</div>
+
+  <h2>15.2 The demonstration, step by step</h2>
+  <table class="compact">
+    <thead><tr><th style="width:4%">#</th><th style="width:30%">What to do</th><th>What to point out</th><th class="num" style="width:7%">Time</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Home page.</td><td>The one-sentence purpose. The moving picture is a real optical image of Dadu, Sindh, before and after the 2022 floods. A person makes every decision.</td><td class="num">0:30</td></tr>
+      <tr><td>2</td><td><b>Check a place → A past disaster → Sindh floods, Pakistan (2022).</b> Step through What and When.</td><td>The case study fills in the three questions. On the When step, open <b>Check which satellite images exist</b>: it lists the real radar and optical passes around the event date without starting a check (radar every 6 to 12 days; optical about every 5 days, useful only without cloud).</td><td class="num">1:30</td></tr>
+      <tr><td>3</td><td>On the <b>Anywhere</b> tab of step 1 (optional), draw a large area.</td><td>The size chip ("Good size", "Large, but allowed", "Too big") and <b>Why can one check cover at most 1,500 km²?</b>: a configurable processing budget, not a satellite limit.</td><td class="num">0:45</td></tr>
+      <tr><td>4</td><td>Step 4: open <b>Detection and ranking settings</b>, then press <b>Start</b>.</td><td>Every setting is explained with its default; most checks leave them alone. The progress page shows five plain steps; because this area was checked before, the images come from the cache and the check finishes in seconds.</td><td class="num">1:00</td></tr>
+      <tr><td>5</td><td>The result's short answer.</td><td>Newly flooded area, people potentially exposed ("exposed" is not "harmed"), the most urgent priority, the confidence level, and that the check needs a person's review, with the reason.</td><td class="num">1:00</td></tr>
+      <tr><td>6</td><td>The map: press <b>Expand map</b>, switch layers, then <b>Compare before / after</b>; press <b>Back to normal size</b>.</td><td>Detected new water over the real images; the "Radar or optical?" layer shows which sensor the model relied on, pixel by pixel; clouds do not stop the radar.</td><td class="num">1:30</td></tr>
+      <tr><td>7</td><td><b>Where to help first</b>: click the top square.</td><td>The score from 0 to 100, its written reasons and the factors behind it; the life-safety rule; the stability of the ranking when the weights are varied.</td><td class="num">1:00</td></tr>
+      <tr><td>8</td><td><b>People &amp; places</b>, then <b>How we know</b>.</td><td>Facilities inside or near the flooded area; the images used (each with a link to its record in the Planetary Computer catalogue); the safety-check notes; the full step-by-step record of the agent.</td><td class="num">1:30</td></tr>
+      <tr><td>9</td><td><b>To review</b>: press <b>Looks right</b> on the finding, with a short note; then open a draft warning.</td><td>The finding exists because safety check G11 found unusual input data. A draft warning is never sent automatically: a named person approves or rejects it, and on this server an approved warning is kept in AegisEO because no delivery channel is configured. Every decision is recorded.</td><td class="num">1:30</td></tr>
+      <tr><td>10</td><td>The <b>Review</b> page: open <b>How reviewing works</b>.</td><td>The four kinds of item (safety checks, findings, draft warnings, priority changes) and what happens after each decision.</td><td class="num">0:30</td></tr>
+      <tr><td>11</td><td><b>About → How accurate is it?</b> and <b>Where the data comes from</b>.</td><td>IoU 0.844 on unseen test images and 0.653 with no optical image at all; every data source with its live status, checked just now.</td><td class="num">1:00</td></tr>
+      <tr><td>12</td><td>(If time allows) a practice run, or the phone view.</td><td>The violet "Practice data" label on everything simulated; a practice warning can never be published. On a phone, the same pages with a bottom tab bar.</td><td class="num">0:45</td></tr>
+    </tbody>
+  </table>
+  <p>Close with the three-part answer to "how do you know it works?" (Section 14.8) and one honest limitation, for example that the Derna flash flood had drained before the satellites passed.</p>
+
+  <h2>15.3 If something goes wrong</h2>
+  <table class="compact">
+    <thead><tr><th style="width:30%">Problem</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr><td>The internet is slow or down.</td><td>Show the checks that are already finished: they are stored on the computer. The background map needs the internet; without it, the map waits up to 8 seconds and then draws a plain grey background, while AegisEO's own layers (detected area, squares, places, before/after images) still appear because they come from the local server. A practice run works completely offline.</td></tr>
+      <tr><td>A new real check is needed without internet.</td><td>Start the backend in offline mode (<code>AEGIS_OFFLINE=true</code>). An area that was already checked then runs from the saved data (tested for Sindh on 8 November 2026: the same result in 8 seconds). A new area cannot work offline, and AegisEO says so instead of inventing data.</td></tr>
+      <tr><td>A check takes too long.</td><td>Leave the page (the check keeps running on the server) and continue with a finished check. Press <b>Stop</b> if needed; the check ends as "Stopped".</td></tr>
+      <tr><td>A public service fails during the demonstration (for example OpenStreetMap).</td><td>Use it as a demonstration: the result says which information is missing and lowers its confidence instead of failing. Benchmark scenarios A04 and A05 test exactly this.</td></tr>
+      <tr><td>The server stops.</td><td>Start it again. Checks that were running are marked "Interrupted" and can be started again with the <b>Run again</b> button; finished checks and decisions are kept.</td></tr>
+      <tr><td>The computer fails.</td><td>Present from the slides, which contain genuine screenshots of every step above.</td></tr>
+    </tbody>
+  </table>
+
+</section>

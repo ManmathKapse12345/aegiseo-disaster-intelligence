@@ -40,7 +40,7 @@ describe("ui", () => {
   });
   it("confidence is explained, not just labelled", () => {
     render(<ConfidenceMeter level="Low" />);
-    expect(screen.getByRole("group", { name: "How sure we are: Low" })).toHaveTextContent(/first guess/);
+    expect(screen.getByRole("group", { name: "How sure we are: Low" })).toHaveTextContent(/first estimate and check them/);
   });
   it("error state turns API errors into actionable text", () => {
     render(<ErrorState error={new ApiError("invalid request", 422, [{ field: "hazard", message: "unsupported" }])} />);

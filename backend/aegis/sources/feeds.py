@@ -32,12 +32,13 @@ class HazardFeeds:
         self.meteo = ResilientHttpClient("open_meteo", settings=self.settings, timeout_s=30, cache_ttl_s=12 * 3600)
 
     # ------------------------------------------------------------------ GDACS
-    def gdacs_events(self, days: int = 21, min_alert: str = "Green") -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    def gdacs_events(self, days: int = 21, min_alert: str = "Green", use_cache: bool = True) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         to_d = datetime.now(UTC).date()
         from_d = to_d - timedelta(days=days)
         levels = {"Green": "Green;Orange;Red", "Orange": "Orange;Red", "Red": "Red"}[min_alert]
         res = self.gdacs.get(self.settings.gdacs_url, params={
-            "eventlist": "FL;TC;EQ;WF;DR;VO", "fromDate": from_d.isoformat(), "toDate": to_d.isoformat(), "alertlevel": levels})
+            "eventlist": "FL;TC;EQ;WF;DR;VO", "fromDate": from_d.isoformat(), "toDate": to_d.isoformat(), "alertlevel": levels},
+            use_cache=use_cache)
         data = res.json()
         events = []
         for f in data.get("features", []):
@@ -67,8 +68,8 @@ class HazardFeeds:
         return events, {"status": "ok", "provenance": res.provenance(), "stale": res.stale}
 
     # ------------------------------------------------------------------ USGS
-    def earthquakes(self) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        res = self.usgs.get(self.settings.usgs_feed_url)
+    def earthquakes(self, use_cache: bool = True) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        res = self.usgs.get(self.settings.usgs_feed_url, use_cache=use_cache)
         data = res.json()
         out = []
         for f in data.get("features", []):
@@ -115,13 +116,13 @@ class HazardFeeds:
         return out, {"status": "ok", "mode": mode, "provenance": res.provenance(), "stale": res.stale}
 
     # ------------------------------------------------------------------ Open-Meteo
-    def rainfall(self, lon: float, lat: float, start: date, end: date) -> tuple[dict[str, Any], dict[str, Any]]:
+    def rainfall(self, lon: float, lat: float, start: date, end: date, use_cache: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
         end = min(end, datetime.now(UTC).date() - timedelta(days=5))
         if end < start:
             raise SourceUnavailableError("open_meteo", "reanalysis precipitation not yet available for these dates (~5 day latency)")
         res = self.meteo.get(self.settings.open_meteo_archive_url, params={
             "latitude": round(lat, 4), "longitude": round(lon, 4), "start_date": start.isoformat(), "end_date": end.isoformat(),
-            "daily": "precipitation_sum", "timezone": "UTC"})
+            "daily": "precipitation_sum", "timezone": "UTC"}, use_cache=use_cache)
         data = res.json()
         days = (data.get("daily") or {}).get("time", [])
         vals = (data.get("daily") or {}).get("precipitation_sum", [])
@@ -133,17 +134,27 @@ class HazardFeeds:
             "note": "ERA5-based reanalysis at the AOI centroid (~25 km grid); not a gauge observation"}
 
     def health(self, which: str) -> dict[str, Any]:
+        # use_cache=False everywhere: "operational" must mean the service answered now, not that a cached copy exists
         try:
             if which == "gdacs":
-                ev, _ = self.gdacs_events(days=3)
+                ev, _ = self.gdacs_events(days=3, use_cache=False)
                 return {"status": "operational", "detail": f"{len(ev)} events in last 3 days"}
             if which == "usgs":
-                ev, _ = self.earthquakes()
+                ev, _ = self.earthquakes(use_cache=False)
                 return {"status": "operational", "detail": f"{len(ev)} M4.5+ events in last 7 days"}
             if which == "open_meteo":
                 d = datetime.now(UTC).date() - timedelta(days=10)
-                self.rainfall(0.0, 0.0, d, d)
+                self.rainfall(0.0, 0.0, d, d, use_cache=False)
                 return {"status": "operational"}
+            if which == "firms":
+                # HEAD request on the public 7-day file: proves the server answers without downloading ~30 MB
+                res = self.firms.request("HEAD", self.settings.firms_public_url, use_cache=False, timeout_s=20)
+                key = bool(self.settings.firms_map_key.get_secret_value())
+                modified = next((v for k, v in res.headers.items() if k.lower() == "last-modified"), None)
+                return {"status": "operational",
+                        "detail": ("MAP_KEY configured (historical queries enabled)" if key
+                                   else "public 7-day file only; set AEGIS_FIRMS_MAP_KEY for older dates")
+                        + (f"; file last updated {modified}" if modified else "")}
         except SourceUnavailableError as exc:
             return {"status": "unavailable", "error": exc.reason}
         except Exception as exc:  # unexpected payload format

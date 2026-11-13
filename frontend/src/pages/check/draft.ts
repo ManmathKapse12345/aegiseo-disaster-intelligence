@@ -1,9 +1,9 @@
 import type { Hazard, LiveEvent, Scenario } from "@/api/types";
 import { type BBox, bboxAreaKm2 } from "@/lib/geo";
 import { isoDate } from "@/lib/format";
+import { DEFAULT_LIMITS, type Limits } from "@/lib/limits";
 import { areaVerdict, autoName, dateProblems, defaultWindows, type Windows } from "@/lib/plain";
 
-export const MAX_KM2 = 1500; // backend AEGIS_MAX_AOI_KM2 default
 export const DRAFT_KEY = "aegis.check.draft.v2";
 export type Source = "past" | "live" | "map";
 
@@ -51,7 +51,8 @@ export function emptyDraft(source: Source = "map"): Draft {
 
 export { SUPPORTED_EVENT } from "@/lib/events";
 import { SUPPORTED_EVENT } from "@/lib/events";
-/** A live alert gives one point; check a box of about 18 x 18 km around it. */
+/** A live alert gives one point; check a box of 0.16 x 0.16 degrees around it (about 18 km north-south; east-west it
+ *  narrows with latitude, e.g. about 13 km at 45 degrees, so the UI shows the measured size instead of a fixed figure). */
 export const EVENT_HALF_DEG = 0.08;
 
 export type Action =
@@ -124,20 +125,29 @@ export function reducer(d: Draft, a: Action): Draft {
 export const areaKm2 = (d: Draft) => (d.bbox ? bboxAreaKm2(d.bbox) : null);
 export const displayName = (d: Draft) => (d.nameTouched || d.name ? d.name : d.hazard ? autoName(d.hazard, d.place, d.event) : "");
 
-/** Why each step is (not yet) complete - shown next to the Continue button. */
-export function stepStatus(d: Draft, step: number): { ok: boolean; why: string } {
+/** The ranking needs at least one positive weight on each side of the score (same rule as the API, backend/aegis/api/schemas.py). */
+export function weightProblem(w: Expert["weights"]): string | null {
+  if (w.extent + w.intensity <= 0) return "Give at least one of the two 'change found' weights a value above 0.";
+  if (w.population + w.critical_facilities + w.access <= 0) return "Give at least one of the three 'people and places' weights a value above 0.";
+  return null;
+}
+
+/** Why each step is (not yet) complete - shown next to the Continue button. Limits come from the server (GET /api/config). */
+export function stepStatus(d: Draft, step: number, limits: Limits = DEFAULT_LIMITS): { ok: boolean; why: string } {
   if (step === 0) {
     if (d.synthetic) return { ok: true, why: "" };
     if (!d.bbox) return { ok: false, why: "Choose a place to continue." };
-    const v = areaVerdict(areaKm2(d), MAX_KM2);
+    const v = areaVerdict(areaKm2(d), limits.maxKm2, limits.minKm2, limits.fullDetailKm2);
     return v.ok ? { ok: true, why: "" } : { ok: false, why: v.text };
   }
   if (step === 1) return d.hazard ? { ok: true, why: "" } : { ok: false, why: "Choose what kind of disaster to look for." };
   if (step === 2) {
     if (d.synthetic) return { ok: true, why: "" };
-    const p = dateProblems(d.event, d.windows, todayIso());
+    const p = dateProblems(d.event, d.windows, todayIso(), limits.maxWindowDays, limits.maxGapDays);
     return p.errors.length ? { ok: false, why: p.errors[0] } : { ok: true, why: "" };
   }
   const n = displayName(d).trim();
-  return n.length >= 3 ? { ok: true, why: "" } : { ok: false, why: "Give it a name of at least 3 letters." };
+  if (n.length < 3) return { ok: false, why: "Give it a name of at least 3 letters." };
+  const wp = d.expert.touched && !d.synthetic ? weightProblem(d.expert.weights) : null;
+  return wp ? { ok: false, why: `Ranking settings: ${wp}` } : { ok: true, why: "" };
 }

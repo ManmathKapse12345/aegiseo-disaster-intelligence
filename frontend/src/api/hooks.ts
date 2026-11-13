@@ -1,13 +1,15 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, patch, post } from "./client";
 import type {
-  Alert, AnalysisBrief, AnalysisDetail, CellProps, CreateAnalysis, Dashboard, LayerInfo, LiveEvent, Me, Passage, Place, ReviewTask,
-  Scenario, Source, Trace,
+  Alert, AnalysisBrief, AnalysisDetail, CellProps, CreateAnalysis, Dashboard, LayerInfo, LiveEvent, Me, Place, ReviewTask,
+  Scenario, ServerConfig, Source, Trace,
 } from "./types";
 
 const ACTIVE = new Set(["queued", "running"]);
 
 export const useMe = () => useQuery({ queryKey: ["me"], queryFn: () => api<Me>("/api/me"), staleTime: 60_000 });
+/** Limits and optional features of this server; they change only when the server is restarted with new settings. */
+export const useConfig = () => useQuery({ queryKey: ["config"], queryFn: () => api<ServerConfig>("/api/config"), staleTime: Infinity, retry: 1 });
 export const useHealth = () =>
   useQuery({ queryKey: ["health"], queryFn: () => api<{ status: string; version: string }>("/api/health", { timeoutMs: 8000 }), refetchInterval: 30_000, retry: 0 });
 
@@ -67,9 +69,6 @@ export const useBenchmarks = () =>
     refetchInterval: (q) => (q.state.data?.running ? 3000 : 30_000) });
 export const useBenchmark = (id?: string) =>
   useQuery({ queryKey: ["benchmark", id], queryFn: () => api<{ results: any[]; summary: Record<string, number | null> }>(`/api/benchmarks/${id}`), enabled: !!id });
-export const useKnowledge = () => useQuery({ queryKey: ["knowledge"], queryFn: () => api<{ doc_id: string; title: string; tags: string[]; sections: { ref: string; section: string; text: string }[] }[]>("/api/knowledge"), staleTime: Infinity });
-export const useKnowledgeSearch = (q: string) =>
-  useQuery({ queryKey: ["kb", q], queryFn: () => api<Passage[]>(`/api/knowledge/search?q=${encodeURIComponent(q)}`), enabled: q.trim().length >= 2 });
 
 /** Place search runs only for a submitted term (Nominatim forbids type-ahead); results are cached per term. */
 export const usePlaces = (term: string) =>

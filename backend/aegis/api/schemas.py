@@ -19,6 +19,16 @@ class WeightsIn(BaseModel):
     access: float = Field(0.20, ge=0, le=10)
     hazard_exponent: float = Field(0.5, ge=0.05, le=0.95)
 
+    @model_validator(mode="after")
+    def _both_groups_used(self) -> WeightsIn:
+        # The score multiplies a hazard part and an exposure part (analysis/prioritize.py), so each part needs at
+        # least one positive weight. Rejecting here returns 422 at once, instead of failing the run at the ranking step.
+        if self.extent + self.intensity <= 0:
+            raise ValueError("at least one hazard weight (extent or intensity) must be greater than 0")
+        if self.population + self.critical_facilities + self.access <= 0:
+            raise ValueError("at least one exposure weight (population, critical_facilities or access) must be greater than 0")
+        return self
+
 
 class DetectionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -53,7 +63,7 @@ class AnalysisCreate(BaseModel):
     event_date: date
     pre_window: tuple[date, date] | None = None
     post_window: tuple[date, date] | None = None
-    resolution_m: float = Field(20.0, ge=10, le=100)
+    resolution_m: float | None = Field(None, ge=10, le=100, description="grid pixel size; default AEGIS_DEFAULT_RESOLUTION_M (20 m)")
     weights: WeightsIn | None = None
     detection: DetectionIn | None = None
     synthetic: SyntheticIn | None = None

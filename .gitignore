@@ -1,5 +1,6 @@
 # runtime data, caches, downloaded datasets, databases, generated artefacts
-data/
+# (anchored to the repository root: an unanchored "data/" also ignored frontend/src/data/, which the UI imports)
+/data/
 *.db
 *.db-wal
 *.db-shm
@@ -33,3 +34,6 @@ models/evaluation_log.txt
 .idea/
 .DS_Store
 Thumbs.db
+
+# Generated submission bundle (docs/deliverables/source/prepare_submission.py)
+docs/deliverables/submission/

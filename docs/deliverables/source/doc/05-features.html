@@ -1,0 +1,95 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 5</span>The main features and how each one works</h1>
+  <p class="lead">Chapter 4 showed the pages. This chapter explains each feature: what it produces, the steps it follows, and where it lives in the code. Every check, whatever the disaster type, runs the same ten-step plan (Figure 5.1); the detection step differs per disaster.</p>
+  <figure>
+    <div class="diagram" data-diagram="pipeline"></div>
+    <figcaption><b>Figure 5.1</b> The ten-step plan the agent follows for every check (<code>backend/aegis/agents/orchestrator.py</code>). Safety checks G01-G18 sit between the steps; two of them can stop a check early.</figcaption>
+  </figure>
+
+  <h2>5.1 Flood mapping (the main, trained method)</h2>
+  <p><b>What it produces:</b> the newly flooded area (polygons and km²), a per-pixel probability map, an uncertainty map, a "radar or optical" reliance map, and the agreement with an independent method.</p>
+  <figure>
+    <div class="diagram" data-diagram="flood"></div>
+    <figcaption><b>Figure 5.2</b> Flood detection (<code>detect_flood</code> in <code>backend/aegis/analysis/hazards.py</code>). The default threshold and patch size are the user-adjustable settings of Chapter 8.</figcaption>
+  </figure>
+  <ol>
+    <li>The flood model estimates, for every pixel, the probability of water <i>after</i> the event from the 'after' radar and optical images, and the probability of water <i>before</i> from the 'before' images.</li>
+    <li>The probability of <b>new</b> water is P(after) × (1 − P(before)): high only where water is likely now and was unlikely before. If no 'before' image exists, the long-term water record (JRC occurrence) is used instead and the result is flagged as less precise.</li>
+    <li>Permanent water (JRC occurrence of 80% or more) is removed, so rivers and lakes are never reported as flooding.</li>
+    <li>Terrain plausibility removes "water" more than 15 m above the local drainage or on slopes steeper than 8°, which removes radar shadow on hillsides.</li>
+    <li>Pixels with probability at least 0.5 are marked, and patches smaller than 0.5 ha are removed as noise.</li>
+    <li>An independent cross-check compares the result with two simple methods: a drop of at least 3 dB in the speckle-filtered radar signal, and the optical water index MNDWI changing from not-water to water. The share of the flooded area that at least one of them confirms is the <dfn>cross-method agreement</dfn>.</li>
+  </ol>
+
+  <h2>5.2 Wildfire burn-scar mapping</h2>
+  <p><b>What it produces:</b> the burned area and its severity in four classes (low, moderate-low, moderate-high, high).</p>
+  <ul>
+    <li><b>Main method (clear optical images before and after):</b> dNBR is computed for every pixel. A pixel is burned when dNBR is at least 0.10 (adjustable), it had vegetation before (NDVI above 0.15) and it is not water. Severity follows the USGS classes of Section 3.5.</li>
+    <li><b>Cross-checks:</b> a drop of at least 1 dB in the radar VH band (loss of canopy) and, when available, NASA FIRMS active-fire detections within 750 m of the burn.</li>
+    <li><b>Fallback when clouds or smoke hide the optical images:</b> a VH radar drop of at least 2 dB over vegetated land. This is a weak substitute and its confidence is reduced; the interface warns about it before the check starts.</li>
+  </ul>
+  <div class="box limit"><span class="bt">Limitation</span>The public NASA FIRMS file covers only the last 7 days. Fire detections for older events need a free FIRMS key (<code>AEGIS_FIRMS_MAP_KEY</code>), which is not set on this copy, so historical wildfire checks run without that cross-check and say so.</div>
+
+  <h2>5.3 Landslide candidate screening</h2>
+  <p><b>What it produces:</b> "possible landslide" areas. Landslides from 10-20 m images are uncertain, so this is a screening tool:</p>
+  <ul>
+    <li>only slopes of at least 10° are considered (from the DEM);</li>
+    <li>two indicators are combined: vegetation stripped away (NDVI dropping by at least 0.15, weight 0.65) and a strong radar change (at least 2.5 dB either way, weight 0.35);</li>
+    <li>a pixel becomes a candidate when the weighted score reaches 0.6 (or 0.99 with radar only), and patches smaller than half the minimum patch size (at least 0.2 ha) are removed;</li>
+    <li>every landslide result triggers safety check G15, so a person must always confirm it.</li>
+  </ul>
+
+  <h2>5.4 Exposure: who and what is there</h2>
+  <p>For every check AegisEO estimates what lies in or near the detected area (<code>backend/aegis/analysis/impact.py</code>):</p>
+  <ul>
+    <li><b>People</b>: the HRSL population grid is resampled onto the analysis grid in a way that preserves totals (counts are converted to density, averaged onto the new pixels, and converted back). The sum inside the detected area is the number of people potentially exposed. WorldPop's total for the whole area is reported beside it as an independent estimate. Where HRSL has no data, WorldPop's total is spread over built-up land from WorldCover and labelled approximate (a <dfn>dasymetric</dfn> method: distributing a total according to land use).</li>
+    <li><b>Important places</b>: hospitals, clinics, fire and ambulance stations, police, shelters, schools and colleges, power plants and substations, water and wastewater works from OpenStreetMap, each labelled <i>inside</i> the detected area, <i>near</i> (within 500 m) or outside.</li>
+    <li><b>Villages and towns</b> (named OSM places), <b>roads</b> (length of motorways to tertiary roads crossing the area, by class) and <b>land cover</b> (hectares of cropland, built-up land and so on, from WorldCover).</li>
+  </ul>
+  <p>If OpenStreetMap or the population service is unavailable, the check continues, marks that information as missing, and lowers its confidence (planning rules P8 and P9).</p>
+
+  <h2>5.5 Ranking: where to help first</h2>
+  <figure>
+    <div class="diagram" data-diagram="priority"></div>
+    <figcaption><b>Figure 5.3</b> How a priority square is scored (<code>backend/aegis/analysis/prioritize.py</code>). The weights shown are the defaults; Chapter 8 explains each one.</figcaption>
+  </figure>
+  <p>The area is divided into squares, 0.5 km across for areas under 50 km² and 1 km otherwise, and larger only if more than 900 squares would be needed. A square is ranked only if at least 1 hectare of it changed. Each square's score combines a <b>hazard part H</b> (how much of the square changed and how strongly) and an <b>exposure part E</b> (people, important places and roads) as</p>
+  <p style="text-align:center;font-size:11pt"><b>score = 100 × H<sup>a</sup> × E<sup>1−a</sup></b>, with a = 0.5 by default.</p>
+  <p>This multiplicative form is the one used by risk indices such as the INFORM risk index: a square scores high only when both the hazard and the exposure are present, so an empty field that flooded completely, or a crowded town that did not flood, cannot reach Critical. Squares scoring 70 or more are <b>Critical</b>, 50 or more <b>High</b>, 30 or more <b>Moderate</b>, and the rest <b>Low</b>. A <b>life-safety rule</b> then raises a square to at least High if a hospital, clinic, fire or ambulance station or shelter lies inside its detected area with average confidence of at least 0.6.</p>
+  <p>Each square also gets a <b>confidence</b> level from its uncertainty, the cross-check agreement and how complete its data are. Confidence is reported separately and never lowers the score: an uncertain but potentially serious square must be checked, not hidden. When confidence is Low and the square is Critical or High, a finding to double-check is created. Finally a <dfn>sensitivity analysis</dfn> varies all weights randomly 200 times to show how stable each square's rank and category are ("stays between rank 3 and 7, keeps its High label 92% of the time").</p>
+
+  <h2>5.6 Overall confidence</h2>
+  <p>Every result carries one overall confidence level (High, Medium or Low), computed from the average model uncertainty (45%), the cross-method agreement (35%) and data completeness (20%: whether population, infrastructure and 'before' images were available). It is capped at Medium for landslides, for the simple backup method, and whenever a result-stage safety check asked for a person.</p>
+
+  <h2>5.7 Draft warnings</h2>
+  <p>After every finished check, AegisEO drafts one short warning about the whole area plus one for each Critical or High square (at most five), written from the measured facts by fixed templates. Before anyone sees them, every number and date in the text is compared with the recorded measurements and the wording is checked for alarming or directive language. They then wait for a person to approve or reject them. Chapter 6 explains this in full.</p>
+
+  <h2>5.8 Reports and exports</h2>
+  <table class="compact">
+    <thead><tr><th>Output</th><th>Contents</th><th>Produced by</th></tr></thead>
+    <tbody>
+      <tr><td>PDF report</td><td>Summary, key numbers, map, priority table, safety checks, methods and limitations, data credits</td><td><code>reports/documents.py</code> (ReportLab)</td></tr>
+      <tr><td>CSV</td><td>Every priority square with score, category, factors, people and facilities</td><td><code>reports/documents.py</code></td></tr>
+      <tr><td>GeoJSON</td><td>Detected areas, priority squares and facilities as map features</td><td><code>reports/documents.py</code></td></tr>
+      <tr><td>GeoTIFF</td><td>Probability, detected area and uncertainty per pixel</td><td><code>reports/layers.py</code></td></tr>
+      <tr><td>Map layers</td><td>Transparent PNG overlays for the web map (images, result, probability, uncertainty, reliance, radar change)</td><td><code>reports/layers.py</code></td></tr>
+    </tbody>
+  </table>
+  <p>Reports are always generated from the stored records, never from temporary data, so a downloaded report matches the database exactly. <dfn>GeoJSON</dfn> is a standard text format for map shapes, readable by GIS programs such as QGIS; <dfn>CSV</dfn> (comma-separated values) is a plain table that opens in Excel.</p>
+
+  <h2>5.9 Memory of earlier checks</h2>
+  <p>At the start of every check, the agent recalls up to five earlier finished checks of the same disaster type whose areas overlap the new one (within 0.25°). It collects corrections people made to them: findings marked wrong, priorities changed and warnings rejected. If there are any, the new result shows "People corrected earlier checks of this area" with links, and the check ends at least as "Done, with notes". The new result itself is not changed by these corrections. This is called <dfn>episodic memory</dfn>: memory of specific past cases (<code>backend/aegis/agents/memory.py</code>).</p>
+
+  <h2>5.10 The method knowledge base</h2>
+  <p>AegisEO includes six short documents describing its methods and their limits (SAR flood mapping, optical indices, flood methodology, wildfire and landslide methods, exposure and priority, alerting and review), in <code>backend/aegis/knowledge</code>. When writing a result, the reporting step searches them for passages relevant to the situation (for example "clouds optical" when the 'after' image was cloudy) and attaches them as cited guidance. The search uses <dfn>TF-IDF</dfn> (term frequency - inverse document frequency), a classic text-retrieval method that ranks passages by how many distinctive words they share with the query. Retrieving stored text to support generated text is known as <dfn>retrieval-augmented generation (RAG)</dfn>. The public search box for these documents was removed from the About page in this round of changes; the knowledge base itself is still used for report guidance and remains available through the API.</p>
+
+  <h2>5.11 Live alerts, rain and place search</h2>
+  <ul>
+    <li><b>Live alerts</b>: GDACS events of the last 21 days (floods, cyclones, earthquakes, wildfires, droughts, volcanoes) and USGS earthquakes of magnitude 5.5 or more from the last 7 days, cached for 10 minutes.</li>
+    <li><b>Rain</b>: daily rainfall at the centre of the area from Open-Meteo's archive of the ERA5 <dfn>reanalysis</dfn> (a computer reconstruction of past weather from many observations), shown as a bar chart under "How we know". It is about 25 km coarse and available about 5 days after the date.</li>
+    <li><b>Place search</b>: names are looked up through OpenStreetMap Nominatim by the server (never directly by the browser), no more than once per second as Nominatim's rules require, with results kept for 7 days.</li>
+  </ul>
+
+  <h2>5.12 Data-source health, accuracy and safety tests</h2>
+  <p>The <b>Where the data comes from</b> page lists all 15 sources with their licence, coverage, limits and a live status. In this round of changes, the status checks were corrected so that "Working" always means the service answered just now (Chapter 12). The <b>How accurate is it?</b> page shows the flood model's evaluation and the agent benchmark (Chapter 14), read from the server's own result files.</p>
+</section>

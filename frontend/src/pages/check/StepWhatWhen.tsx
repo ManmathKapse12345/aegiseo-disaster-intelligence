@@ -1,9 +1,10 @@
-import { Check, CloudSun, RotateCcw } from "lucide-react";
+import { Check, CloudSun, RotateCcw, Satellite } from "lucide-react";
 import type { Dispatch } from "react";
 import { useCatalogPreview } from "@/api/hooks";
 import type { Hazard } from "@/api/types";
 import { Callout, Disclosure, ErrorState, InfoTip, Loading } from "@/components/ui";
 import { fmtDate } from "@/lib/format";
+import { type Limits, useLimits } from "@/lib/limits";
 import { HAZARDS } from "@/lib/meta";
 import { dateProblems, type Windows } from "@/lib/plain";
 import { type Action, type Draft, todayIso } from "./draft";
@@ -39,8 +40,8 @@ export function StepWhat({ d, dispatch }: { d: Draft; dispatch: Dispatch<Action>
         {d.hazard && HAZARDS[d.hazard].caution && !d.synthetic && <Callout tone="info">{HAZARDS[d.hazard].caution}</Callout>}
         <Disclosure summary="Why aren't earthquakes or storms listed?">
           <p className="small ink-2 prose">
-            Earthquake damage (cracked or collapsed buildings) and storm wind damage are smaller than what these free satellite photos can show -
-            each picture element covers 10 to 20 metres. Storms often cause floods, though: for a storm, choose <strong>Flood</strong> to map the flooding.
+            Earthquake damage (cracked or collapsed buildings) and storm wind damage are smaller than what these free satellite images can show:
+            each pixel covers 10 to 20 metres. Storms often cause floods, though: for a storm, choose <strong>Flood</strong> to map the flooding.
           </p>
         </Disclosure>
       </div>
@@ -51,14 +52,15 @@ export function StepWhat({ d, dispatch }: { d: Draft; dispatch: Dispatch<Action>
 // ============================================================================ when
 export function StepWhen({ d, dispatch }: { d: Draft; dispatch: Dispatch<Action> }) {
   const today = todayIso();
-  const { errors, warnings } = dateProblems(d.event, d.windows, today);
+  const limits = useLimits();
+  const { errors, warnings } = dateProblems(d.event, d.windows, today, limits.maxWindowDays, limits.maxGapDays);
   const w = d.windows;
   const setW = (patch: Partial<Windows>) => dispatch({ type: "windows", windows: { ...w, ...patch } });
 
   if (d.synthetic) {
     return (
       <Callout tone="practice" title="Dates are fixed for this practice run">
-        The made-up scene has one 'before' and one 'after' picture, so there's nothing to choose here. Press Continue.
+        The made-up scene has one 'before' and one 'after' image, so there's nothing to choose here. Press Continue.
       </Callout>
     );
   }
@@ -72,13 +74,22 @@ export function StepWhen({ d, dispatch }: { d: Draft; dispatch: Dispatch<Action>
       </div>
 
       <div className="card card-pad">
-        <h4>Which photos AegisEO will look for</h4>
+        <h4>Which images AegisEO will search for</h4>
         <TimelineViz event={d.event} w={w} />
+        {/* selection rules: backend/aegis/agents/specialists.py DataAcquisitionAgent (P1, P2, P4) */}
         <div className="grid g-2" style={{ marginTop: 18, gap: 16 }}>
-          <p className="small"><strong>Before:</strong> the clearest photos taken between {fmtDate(w.pre[0])} and {fmtDate(w.pre[1])}.</p>
-          <p className="small"><strong>After:</strong> the first good photos taken between {fmtDate(w.post[0])} and {fmtDate(w.post[1])}.</p>
+          <p className="small"><strong>Before:</strong> images taken between {fmtDate(w.pre[0])} and {fmtDate(w.pre[1])}. AegisEO uses the clearest optical image,
+            and the latest radar image taken from the same orbit as the 'after' radar image.</p>
+          <p className="small"><strong>After:</strong> images taken between {fmtDate(w.post[0])} and {fmtDate(w.post[1])}. AegisEO uses the earliest radar image
+            and the clearest optical image, preferring earlier dates.</p>
         </div>
-        {!d.customDates && <p className="caption muted" style={{ marginTop: 10 }}>These are suggested from your date: 45 days before, and up to 12 days after.</p>}
+        {!d.customDates && (
+          <p className="caption muted" style={{ marginTop: 10 }}>
+            {d.scenarioId
+              ? "These date ranges were chosen for this case study, so that suitable images exist before and after the event."
+              : "These date ranges were suggested from your date: the 'before' search covers the 45 days before it, and the 'after' search covers the day itself and up to 12 days after it."}
+          </p>
+        )}
       </div>
 
       {errors.length > 0 && <Callout tone="danger" role="alert" title="Please fix the dates">{errors.map((e) => <div key={e}>{e}</div>)}</Callout>}
@@ -88,22 +99,52 @@ export function StepWhen({ d, dispatch }: { d: Draft; dispatch: Dispatch<Action>
         <Disclosure summary={d.customDates ? "Search dates (changed by you)" : "Change the search dates (optional)"} defaultOpen={d.customDates}>
           <div className="grid g-2" style={{ gap: 20 }}>
             <fieldset className="stack">
-              <legend className="label" style={{ marginBottom: 8 }}>'Before' photos taken between</legend>
+              <legend className="label" style={{ marginBottom: 8 }}>'Before' images taken between</legend>
               <input className="input" type="date" aria-label="Before: from" value={w.pre[0]} max={w.pre[1]} onChange={(e) => e.target.value && setW({ pre: [e.target.value, w.pre[1]] })} />
               <input className="input" type="date" aria-label="Before: until" value={w.pre[1]} max={d.event} onChange={(e) => e.target.value && setW({ pre: [w.pre[0], e.target.value] })} />
             </fieldset>
             <fieldset className="stack">
-              <legend className="label" style={{ marginBottom: 8 }}>'After' photos taken between</legend>
+              <legend className="label" style={{ marginBottom: 8 }}>'After' images taken between</legend>
               <input className="input" type="date" aria-label="After: from" value={w.post[0]} min={d.event} onChange={(e) => e.target.value && setW({ post: [e.target.value, w.post[1]] })} />
               <input className="input" type="date" aria-label="After: until" value={w.post[1]} max={today} onChange={(e) => e.target.value && setW({ post: [w.post[0], e.target.value] })} />
             </fieldset>
           </div>
-          <p className="caption muted" style={{ marginTop: 12 }}>
-            Tip: if no 'after' photo is found, make the 'after' search longer. Radar satellites pass every 6 to 12 days. Each search can be up to 120 days.
-          </p>
+          <RevisitExplained limits={limits} />
           {d.customDates && <button className="btn btn-sm" style={{ marginTop: 12 }} onClick={() => dispatch({ type: "resetWindows" })}><RotateCcw size={15} aria-hidden /> Use the suggested dates</button>}
         </Disclosure>
         <PhotoCheck d={d} disabled={errors.length > 0} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What to do when no 'after' image is found, and why images don't exist for every date.
+ * Facts used: revisit intervals from backend/aegis/sources/registry.py (Sentinel-1: 6-12 day repeat; Sentinel-2: ~5 days),
+ * window rules from guardrails.py (G03: <= 120 days) and the automatic extension rule P3 in agents/specialists.py.
+ */
+function RevisitExplained({ limits }: { limits: Limits }) {
+  return (
+    <div className="callout neutral" style={{ marginTop: 16 }}>
+      <Satellite size={20} aria-hidden />
+      <div className="small ink-2 prose" style={{ maxWidth: "none" }}>
+        <p><strong style={{ color: "var(--ink)" }}>If no 'after' image is found, make the 'after' search longer by moving its end date later.</strong></p>
+        <p>
+          A satellite does not take an image of every place every day. It travels around the Earth on a fixed path, so it passes over the same place again
+          only after a set number of days (its <em>revisit interval</em>). The radar satellites (Sentinel-1) usually image the same place every 6 to 12
+          days, depending on the year and the region. The optical satellites (Sentinel-2) pass about every 5 days, but their images are only useful when
+          clouds do not hide the ground.
+        </p>
+        <p>
+          The 'after' search is the date range in which AegisEO looks for images taken after the event. Each search can be at most {limits.maxWindowDays} days
+          long. A longer range makes it more likely that an image exists. It does not replace an earlier radar image with a later one, because AegisEO always
+          uses the earliest radar image in the range. If the range contains no usable image of one type (radar or optical), AegisEO extends the end date for
+          that type by itself, 7 days at a time, at most twice and never past today.
+        </p>
+        <p>
+          A later image is not always better: floodwater can drain away within days, so an image taken long after the event may show nothing. These revisit
+          intervals are typical, not guaranteed for every place; to see which images really exist, use <strong>Check which satellite images exist</strong> below.
+        </p>
       </div>
     </div>
   );
@@ -135,7 +176,9 @@ function TimelineViz({ event, w }: { event: string; w: Windows }) {
   );
 }
 
-type Acq = { datetime: string; tile_cloud_cover: number | null; relative_orbit: number | null };
+type Acq = { datetime: string; tile_cloud_cover: number | null; relative_orbit: number | null; aoi_coverage?: number };
+/** An image must cover at least half of the area to be used (MIN_COVERAGE in backend/aegis/agents/specialists.py). */
+const MIN_COVERAGE = 0.5;
 
 /** Optional: ask the archive which passes exist (search only, nothing is downloaded). */
 function PhotoCheck({ d, disabled }: { d: Draft; disabled: boolean }) {
@@ -146,17 +189,23 @@ function PhotoCheck({ d, disabled }: { d: Draft; disabled: boolean }) {
     const s2 = preview.data?.sensors.S2?.[role];
     const err = (v: unknown) => (v && !Array.isArray(v) ? String((v as { error?: string }).error ?? "unavailable") : null);
     if (err(s1) || err(s2)) return { text: `Couldn't be checked right now (${err(s1) ?? err(s2)}).`, none: false };
-    const radar = Array.isArray(s1) ? (s1 as Acq[]).length : 0;
-    const cam = Array.isArray(s2) ? (s2 as Acq[]) : [];
-    const clear = cam.filter((a) => a.tile_cloud_cover != null && a.tile_cloud_cover < 30).length;
-    return { text: `${radar} radar photo${radar === 1 ? "" : "s"} · ${cam.length} camera photo${cam.length === 1 ? "" : "s"}${cam.length ? ` (${clear} mostly clear)` : ""}`, none: radar + cam.length === 0 };
+    const usable = (v: unknown) => (Array.isArray(v) ? (v as Acq[]).filter((a) => (a.aoi_coverage ?? 1) >= MIN_COVERAGE) : []);
+    const radar = usable(s1);
+    const opt = usable(s2);
+    const clear = opt.filter((a) => a.tile_cloud_cover != null && a.tile_cloud_cover < 30).length;
+    const dates = (list: Acq[]) => (list.length ? ` (${list.slice(0, 6).map((a) => fmtDate(a.datetime, { day: "numeric", month: "short" })).join(", ")}${list.length > 6 ? ", …" : ""})` : "");
+    return {
+      text: `${radar.length} radar image${radar.length === 1 ? "" : "s"}${dates(radar)} · ${opt.length} optical image${opt.length === 1 ? "" : "s"}${opt.length ? `, ${clear} mostly clear` : ""}`,
+      none: radar.length + opt.length === 0,
+    };
   };
   return (
-    <Disclosure summary="Check which satellite photos exist (optional)">
+    <Disclosure summary="Check which satellite images exist (optional)">
       <p className="small ink-2" style={{ marginBottom: 12 }}>
-        AegisEO searches automatically when it starts. Checking first can save time if your dates have no photos yet. This only searches the archive - nothing is downloaded.
+        AegisEO searches automatically when it starts. Searching first can save time if your dates have no images yet. This only searches the archive
+        (Microsoft Planetary Computer); nothing is downloaded.
       </p>
-      <button className="btn btn-sm" onClick={run} disabled={disabled || preview.isPending || !d.bbox}><CloudSun size={16} aria-hidden /> {preview.isPending ? "Searching…" : "Search the photo archive"}</button>
+      <button className="btn btn-sm" onClick={run} disabled={disabled || preview.isPending || !d.bbox}><CloudSun size={16} aria-hidden /> {preview.isPending ? "Searching…" : "Search the image archive"}</button>
       {preview.isPending && <Loading label="Searching the Sentinel archive (Microsoft Planetary Computer)" />}
       {preview.isError && <div style={{ marginTop: 12 }}><ErrorState error={preview.error} /></div>}
       {preview.data && (() => {
@@ -166,11 +215,15 @@ function PhotoCheck({ d, disabled }: { d: Draft; disabled: boolean }) {
           <div className="stack" style={{ marginTop: 14 }}>
             <div className="small"><strong>Before:</strong> {pre.text}</div>
             <div className="small"><strong>After:</strong> {post.text}</div>
-            {post.none && <Callout tone="warn">No 'after' photos were found. Make the 'after' search longer, or wait a few days for the next satellite pass.</Callout>}
+            {post.none && <Callout tone="warn">No 'after' images were found. Make the 'after' search longer, or wait a few days for the next satellite pass.</Callout>}
             {pre.none && !post.none && (d.hazard === "flood"
-              ? <Callout tone="info">No 'before' photos were found. AegisEO can still run, comparing against long-term water records instead - but that is less precise.</Callout>
-              : <Callout tone="warn">No 'before' photos were found. Wildfire and landslide checks need one - make the 'before' search longer.</Callout>)}
-            <p className="caption muted">"Mostly clear" is based on cloud cover over the whole satellite tile. <InfoTip text="AegisEO measures cloud over your exact area when it runs, and picks the clearest photos itself." /></p>
+              ? <Callout tone="info">No 'before' images were found. AegisEO can still run, comparing against long-term water records instead, but that is less precise.</Callout>
+              : <Callout tone="warn">No 'before' images were found. Wildfire and landslide checks need one, so make the 'before' search longer.</Callout>)}
+            <p className="caption muted">
+              Only images that cover at least half of your area are counted, because AegisEO uses no others. Optical images with 80% or more cloud over the
+              whole satellite tile are not listed. "Mostly clear" means under 30% cloud over the tile.{" "}
+              <InfoTip text="When it runs, AegisEO measures the cloud over your exact area (not the whole tile) and picks the clearest optical image itself." />
+            </p>
           </div>
         );
       })()}

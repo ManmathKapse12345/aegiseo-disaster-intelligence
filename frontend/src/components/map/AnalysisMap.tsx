@@ -1,12 +1,13 @@
 import maplibregl, { type GeoJSONSource, type Map as MLMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { ChevronsLeftRight, Columns2, Info, Layers, Maximize2, X } from "lucide-react";
+import { ChevronsLeftRight, Columns2, Focus, Info, Layers, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CellProps, Hazard, LayerInfo } from "@/api/types";
 import { fmtArea, fmtDate, fmtInt, fmtNum, fmtPct } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
 import { FACILITY_LABEL, HAZARDS, PRIORITY_HEX, layerName } from "@/lib/meta";
 import { BASEMAPS, type BasemapId, getBaseStyle, popupContent, setBasemap as applyBasemap } from "./basemap";
+import { ExpandMapButton } from "./expand";
 
 type FC = GeoJSON.FeatureCollection;
 const EMPTY: FC = { type: "FeatureCollection", features: [] };
@@ -23,6 +24,9 @@ interface Props {
   facilities?: FC;
   selectedCell?: string | null;
   onSelectCell?: (id: string | null) => void;
+  /** The page owns the map's container, so it owns the expanded state too (see components/map/expand.tsx). */
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 function webglAvailable(): boolean {
@@ -44,7 +48,7 @@ function addOverlay(map: MLMap, l: LayerInfo, visible: boolean, opacity: number,
 
 const isSettlement = (f: GeoJSON.Feature) => (f.properties as { category?: string } | null)?.category === "settlement";
 
-export function AnalysisMap({ aoi, bbox, hazard, layers, detections, cells, facilities, selectedCell, onSelectCell }: Props) {
+export function AnalysisMap({ aoi, bbox, hazard, layers, detections, cells, facilities, selectedCell, onSelectCell, expanded = false, onToggleExpand }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const beforeHost = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
@@ -147,8 +151,8 @@ export function AnalysisMap({ aoi, bbox, hazard, layers, detections, cells, faci
         const p = e.features?.[0]?.properties as Record<string, number | null> | undefined;
         if (!p) return;
         popup.setLngLat(e.lngLat).setDOMContent(popupContent(hazard === "flood" ? "Area found flooded" : hazard === "wildfire" ? "Burned area" : "Possible landslide", [
-          ["Size", fmtArea(p.area_km2 as number)], ["How likely (average)", fmtPct(p.mean_confidence)],
-          ["Computer unsure (0 = sure)", fmtNum(p.mean_uncertainty, 2)], ["Second method agrees", p.agreement == null ? "not checked" : fmtPct(p.agreement)]])).addTo(map);
+          ["Size", fmtArea(p.area_km2 as number)], ["Average probability", fmtPct(p.mean_confidence)],
+          ["Model uncertainty (0 = certain)", fmtNum(p.mean_uncertainty, 2)], ["Second method agrees", p.agreement == null ? "not checked" : fmtPct(p.agreement)]])).addTo(map);
       });
       map.on("click", "cells-fill", (e) => {
         if (map.queryRenderedFeatures(e.point, { layers: ["fac", "set"] }).length) return;
@@ -221,7 +225,7 @@ export function AnalysisMap({ aoi, bbox, hazard, layers, detections, cells, faci
     map.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]], { padding: 120, maxZoom: 14, duration: 700 });
     const p = f.properties;
     const pop = new maplibregl.Popup({ maxWidth: "320px" }).setLngLat(p.centroid as [number, number]).setDOMContent(popupContent(`${p.category} priority square`, [
-      ["Rank", `${p.rank} (score ${fmtNum(p.score, 0)} of 100)`], ["Part that looks hit", fmtPct(p.affected_fraction)],
+      ["Rank", `${p.rank} (score ${fmtNum(p.score, 0)} of 100)`], ["Share where change was found", fmtPct(p.affected_fraction)],
       ["People living in that part", p.population_exposed == null ? "not known" : `about ${fmtInt(p.population_exposed)}`], ["How sure", p.confidence]])).addTo(map);
     return () => {
       pop.remove();
@@ -288,7 +292,7 @@ export function AnalysisMap({ aoi, bbox, hazard, layers, detections, cells, faci
           <div className="compare-divider" style={{ left: `calc(${split * 100}% - 1.5px)` }}
             onPointerDown={(e) => { dragging.current = true; (e.target as HTMLElement).setPointerCapture(e.pointerId); }}
             onPointerMove={(e) => dragging.current && onDividerMove(e.clientX)} onPointerUp={() => (dragging.current = false)}
-            role="slider" aria-label="Slide to compare the photo before and after" aria-valuenow={Math.round(split * 100)} aria-valuemin={5} aria-valuemax={95} tabIndex={0}
+            role="slider" aria-label="Slide to compare the image before and the image after" aria-valuenow={Math.round(split * 100)} aria-valuemin={5} aria-valuemax={95} tabIndex={0}
             onKeyDown={(e) => { if (e.key === "ArrowLeft") setSplit((s) => Math.max(0.05, s - 0.05)); if (e.key === "ArrowRight") setSplit((s) => Math.min(0.95, s + 0.05)); }}>
             <div className="compare-handle"><ChevronsLeftRight size={20} aria-hidden /></div>
           </div>
@@ -302,6 +306,7 @@ export function AnalysisMap({ aoi, bbox, hazard, layers, detections, cells, faci
           <div className="map-pill"><button type="button" onClick={() => setPanelOpen(true)} aria-expanded={false}><Layers size={16} aria-hidden /> What's shown</button></div>
         )}
         <div className="row-wrap" style={{ marginLeft: "auto", justifyContent: "flex-end" }}>
+          {onToggleExpand && <ExpandMapButton expanded={expanded} onToggle={onToggleExpand} />}
           {preImg && postImg && (
             <div className="map-pill">
               <button type="button" aria-pressed={compare} onClick={() => setCompare((c) => !c)}><Columns2 size={16} aria-hidden /> {compare ? "Stop comparing" : "Compare before / after"}</button>
@@ -311,8 +316,8 @@ export function AnalysisMap({ aoi, bbox, hazard, layers, detections, cells, faci
             {(Object.keys(BASEMAPS) as BasemapId[]).map((id) => (
               <button key={id} type="button" aria-pressed={basemap === id} onClick={() => setBasemap(id)}>{BASEMAPS[id].label}</button>
             ))}
-            <button type="button" title="Zoom to the whole area" aria-label="Zoom to the whole area" onClick={() => mapRef.current?.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: 48, duration: 600 })}>
-              <Maximize2 size={15} aria-hidden />
+            <button type="button" title="Zoom to the whole area that was checked" aria-label="Zoom to the whole area that was checked" onClick={() => mapRef.current?.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: 48, duration: 600 })}>
+              <Focus size={15} aria-hidden />
             </button>
           </div>
         </div>
@@ -332,7 +337,7 @@ export function AnalysisMap({ aoi, bbox, hazard, layers, detections, cells, faci
           <label className="layer-row"><input type="checkbox" checked={showSettlements} onChange={(e) => setShowSettlements(e.target.checked)} />
             <span className="lr-text">Villages and towns ({nSettlements} in or near the area)<small>Named places from OpenStreetMap</small></span></label>
           {main.filter((l) => l.group === "analysis").map(row)}
-          <div className="layer-group-title">Satellite photos</div>
+          <div className="layer-group-title">Satellite images</div>
           {main.filter((l) => l.group === "imagery").map(row)}
           {extra.length > 0 && (
             <details style={{ padding: "4px 0 6px" }}>

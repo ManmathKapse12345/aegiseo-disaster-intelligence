@@ -119,6 +119,44 @@ def test_input_validation_and_safety(client):
     assert set(err["error"]) >= {"code", "message", "request_id"}
 
 
+def test_public_config_matches_settings(client):
+    from aegis.config import get_settings
+
+    s = get_settings()
+    cfg = client.get("/api/config").json()
+    lim = cfg["limits"]
+    assert (lim["min_aoi_km2"], lim["max_aoi_km2"]) == (s.min_aoi_km2, s.max_aoi_km2)
+    assert lim["max_window_days"] == 120 and lim["max_pre_post_gap_days"] == 60
+    assert lim["full_detail_max_km2"] == round(s.max_grid_pixels * s.default_resolution_m**2 / 1e6)
+    assert set(cfg["features"]) == {"alert_delivery", "llm_summary", "firms_history", "auth_enabled", "offline"}
+    assert all(isinstance(v, bool) for v in cfg["features"].values())
+    assert "http" not in str(cfg)  # switches only - never URLs or keys
+
+
+def test_weights_need_both_groups_and_resolution_default_follows_settings(monkeypatch):
+    base = {"name": "Weights", "hazard": "flood", "mode": "synthetic", "event_date": "2024-08-20"}
+    no_hazard = {"extent": 0, "intensity": 0, "population": 1, "critical_facilities": 1, "access": 1}
+    no_exposure = {"extent": 1, "intensity": 1, "population": 0, "critical_facilities": 0, "access": 0}
+    monkeypatch.setenv("AEGIS_DEFAULT_RESOLUTION_M", "30")
+    reset_settings_cache()
+    try:
+        with TestClient(create_app()) as c:
+            for w in (no_hazard, no_exposure):
+                r = c.post("/api/analyses", json={**base, "weights": w})
+                assert r.status_code == 422 and "weight" in r.text, r.text  # rejected before any work starts
+            r = c.post("/api/analyses", json=base)
+            assert r.status_code == 201, r.text
+            aid = r.json()["id"]
+            assert c.get(f"/api/analyses/{aid}").json()["params"]["resolution_m"] == 30  # omitted -> server default
+            wait(c, aid)
+            r = c.post("/api/analyses", json={**base, "resolution_m": 10})
+            assert c.get(f"/api/analyses/{r.json()['id']}").json()["params"]["resolution_m"] == 10
+            wait(c, r.json()["id"])
+    finally:
+        monkeypatch.delenv("AEGIS_DEFAULT_RESOLUTION_M")
+        reset_settings_cache()
+
+
 def test_knowledge_and_scenarios(client):
     hits = client.get("/api/knowledge/search", params={"q": "flooded built-up double bounce"}).json()
     assert hits and hits[0]["ref"].startswith("sar-flood-mapping")

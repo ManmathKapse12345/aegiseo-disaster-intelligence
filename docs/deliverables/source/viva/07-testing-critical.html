@@ -1,0 +1,92 @@
+<section class="chapter flow">
+  <div class="keep"><h1><span class="num">Part 10</span>Testing and results</h1>
+  <div class="qa">
+    <div class="q"><span class="n">93</span><span>How did you test AegisEO? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>At several levels, because each catches different problems: backend unit and integration tests with external services replaced by predictable stand-ins (93 tests, one of which calls the real image catalogue); frontend unit tests (32); end-to-end tests in a real browser on desktop and phone sizes (7); static checks (ruff for Python, the TypeScript compiler); the flood-model evaluation on unseen expert-labelled images; an agent benchmark of 12 scenarios and 8 safety probes; real checks of five past disasters; and, for this round's changes, a scripted browser verification of 19 measured behaviours. (Doc 14.1)</p></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">94</span><span>What were the results? <span class="lvl b">Basic</span></span></div>
+    <div class="a"><p>On 8 November 2026, everything passed: 92 backend tests plus the live-network test, 32 frontend tests, 7 end-to-end tests, ruff and the type check without errors, 12/12 benchmark scenarios and 8/8 safety probes, 19/19 interface checks, and the production build. The model results are those of Question 36. (Doc 14.2)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">95</span><span>What does the agent benchmark show, and what does it not show? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>It runs the whole agent on practice scenes whose correct answer is known: a clean flood, 90% cloud, no radar with heavy cloud, outages of OpenStreetMap and population services, mismatched radar orbits, a corrupted optical image, no "before" image, a wildfire, a landslide, a future date, and a missing model. It checks the final status, the accuracy, the rules applied, whether a person was asked when (and only when) needed, and that every number in every draft is grounded. Eight probes try to break the safety rules. It shows that the logic and safeguards work; it does not show real-world accuracy, because practice scenes are simpler than real ones. (Doc 14.5)</p></div>
+    <div class="fu"><b>Follow-up:</b> What does "escalation recall and precision 1.0" mean? <i>Of the three scenarios that should go to a person (A03, A10, A12), all three did (recall 1.0), and none of the other nine did (precision 1.0). On 12 scenarios this is a sanity check, not a statistical estimate.</i></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">96</span><span>What did the five real case studies show? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Sindh 2022: 78.2 km² of new water, 7,274 people potentially exposed, 24 High squares, review requested by G11 (unusual dry-soil input). Emilia-Romagna 2023: 31.6 km², 4 important places inside, completed with a note. Palisades Fire 2025: 53.9 km² burned, 14,407 people potentially exposed, 2 Critical squares, review requested by G12. Wayanad landslides 2024: 4.7 km² of candidates, Low confidence, several reasons for review including G15. Derna 2023: almost nothing found (0.03 km²). First runs took 5 to 10 minutes; repeats took seconds. (Doc 14.6)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">97</span><span>Derna found almost nothing. Is that a failure? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>It is a correct report of a real limitation. When two dams failed on the night of 10-11 September 2023, the water rushed through the city to the sea. The first "after" radar image was taken on 12 September at 16:30 UTC, about a day and a half later, and the first clear optical image on 22 September; by then little standing water remained, and satellites can only see water that is there when they pass. AegisEO reported almost nothing instead of inventing a flood, and G11 still asked a person to look. The case study was included precisely to show this limit, which applies to all satellite flood mapping of flash floods.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">98</span><span>Is an IoU of 0.844 good enough for real operations? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>It is strong relative to every baseline tested here (classical methods reach 0.39-0.65) and holds up on an unseen event (0.828). But it measures single-date water mapping on 10 m chips, not the full system in an operational setting, and it has not been validated with responders. That is why AegisEO is decision support: it states its confidence, shows its evidence, and leaves consequential decisions to people. I would not claim it is ready to replace an analyst; I would claim it makes an analyst much faster and more consistent.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">99</span><span>Why is the average IoU per chip (0.629) much lower than the overall IoU (0.844)? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>The overall IoU pools all pixels of all chips, so chips with a lot of water count most. The per-chip average gives every chip equal weight, including chips with only a few water pixels, where a handful of mistakes produces a very low IoU (chips with no real water at all are left out of this average). Both are reported; the gap shows that small, scattered water bodies are harder than large floods, which matters for small-area checks.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">100</span><span>How do you know the safety checks ask for review in the right cases? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Partly. In the benchmark, the agent escalated exactly the three scenarios that should be escalated. In the real case studies, four of five checks asked for review, each for a stated and sensible reason. But the thresholds (for example 60% of the area, uncertainty 0.15, 55% agreement) are documented engineering choices, not values fitted on a large labelled set of disasters, and they can raise false alarms, as with Palisades. They are deliberately set to fail on the safe side: an unnecessary review costs a person a minute, a missed problem could cost much more.</p></div>
+  </div>
+</section>
+
+<section class="chapter flow">
+  <div class="keep"><h1><span class="num">Part 11</span>Challenging and critical questions</h1>
+
+  <h2>Assumptions of the method</h2>
+  <div class="qa">
+    <div class="q"><span class="n">101</span><span>P(new water) = P(after) × (1 − P(before)) assumes the two predictions are independent. Is that justified? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>It is an approximation. The model's errors on two dates of the same place are correlated, because the same surface tends to fool it in the same way. In the most common case this helps: a pixel wrongly seen as water on both dates gets a high P(before), so P(new water) stays low, and the error cancels. The honest limitation is different: the evaluation measures water mapping on one date, so the calibration of the combined change probability itself has not been measured. Evaluating it would need expert maps of flood change between two dates.</p></div>
+  </div></div>
+  <div class="qa">
+    <div class="q"><span class="n">102</span><span>The model was trained on Level-1C optical images but runs on Level-2A. Isn't that a mismatch? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Yes, and it is documented. Sen1Floods11 provides top-of-atmosphere reflectance (Level-1C) and radar sigma-nought; AegisEO reads surface reflectance (Level-2A) and terrain-corrected gamma-nought. Three measures reduce the gap: radar values are converted to sigma-nought (−1.1 dB, for an incidence angle of about 39°); training varied the input brightness at random (±10% gain and ±0.02 offset per optical band, ±1.5 dB for radar) so the model tolerates such shifts; and G11 flags areas whose inputs fall outside the training distribution. The gap is reduced, not removed. (Doc 13.2)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">103</span><span>Why not let a large language model run the agent? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Because the decisions here are numeric and safety-relevant, and they must be repeatable and auditable. Written rules give the same decision for the same inputs, can be unit-tested and benchmarked, and record a rule number with every choice. A language model can produce fluent but unsupported statements, and its decisions are harder to test. AegisEO uses a language model only where it adds value without risk: optionally rewording the summary, with every number checked by G16 and the wording by G17. The system works fully without it.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">104</span><span>What if the population data are outdated or wrong? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>They are estimates from 2015-2020 and do not show seasonal workers, displaced people or recent growth, and different sources can disagree strongly (the offline test showed 7,248 against 42,776 for the same area from two sources). AegisEO therefore always names the source and year, says "potentially exposed", reports WorldPop's total beside HRSL's, and keeps the hazard part of the score independent of population. Better and newer exposure data (building footprints, current population) are listed as future work. (Doc 16.3)</p></div>
+  </div>
+
+  <h2>Scale, ethics and design</h2>
+  <div class="qa">
+    <div class="q"><span class="n">105</span><span>How would you scale AegisEO to a whole country? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Not by raising one limit, but by splitting the region into tiles of at most 1,500 km², running them as separate checks on several machines with a shared job queue and a PostgreSQL database, and merging the squares into one ranked list. Downloading would dominate the cost, so the work would ideally run close to the data (in the same cloud region as the image archive). None of this exists today; today a user splits a large region by hand, as the area-limit explanation in the wizard describes. (Doc 16.1)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">106</span><span>What are the ethical risks, and how does the design address them? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Four main risks. <b>Over-trust</b> in a ranking (automation bias): addressed by stated confidence, written reasons, sensitivity results, cautious wording and mandatory human decisions. <b>Unfair gaps:</b> places missing from OpenStreetMap or population maps can be ranked too low; this is stated as a limitation and the hazard part of the score does not depend on those data. <b>False warnings:</b> no warning leaves the system without a named person's approval, and practice data can never be published. <b>Privacy:</b> only aggregated population estimates and public map features are used; no personal data are collected.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">107</span><span>Why did you keep the 1,500 km² limit instead of raising it as users might expect? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Because the investigation showed it is a reasonable default for one computer: near the limit the grid already switches to 30 m pixels and 1.5 km squares, and above it detail would fall further (40 m pixels from about 2,340 km²). Raising it would mainly trade detail for area, which is a decision for whoever runs the server. What changed is that the limit is now explained in the wizard and read from the server, so raising it is one setting with no code change.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">108</span><span>What did you change in the most recent round of work, and why? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Eight requested improvements: the area limit investigated and explained, with limits read from the server; review, findings, warnings and approval explained where they appear; the satellite-revisit tip rewritten and checked against the data; an expandable map; the original icon restored; the "Have a question?" search removed; "Expert settings" renamed and every setting explained; and all wording reviewed (no metaphors, complete sentences). Inspection also found and fixed real problems: dishonest status labels, accepted-but-failing weight settings, an ignored default pixel size, a too-low minimum of uncertainty samples, a <code>.gitignore</code> rule that broke fresh builds, the animation transform, texts that contradicted the code, and the offline population bug. (Doc 14.4)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">109</span><span>What are the biggest remaining limitations? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>Physics and data: only change visible at a satellite pass is seen; floods under trees and between tall buildings are hard; no depth or damage estimates; only the flood method is evaluated against expert maps; population and map data are incomplete or old. Software: one server with two worker threads; sign-in off by default; two settings (<code>run_timeout_s</code> and the uncertainty-sample default) that do not affect checks; the changes of this round not yet committed to Git. (Doc 14.8)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">110</span><span>What would you do differently if you started again? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Three things. Evaluate the final product, the two-date change map, and not only single-date water mapping. Make the server the single source of every limit and text that depends on configuration from the start, as <code>/api/config</code> now does, instead of copying values into the interface. And test the honesty of every status and fallback as early as the main features: several problems found in this round (status labels, offline population) were in fallback paths that ordinary use rarely touches.</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">111</span><span>If you had one more month, what would you build first? <span class="lvl i">Intermediate</span></span></div>
+    <div class="a"><p>An evaluation of the wildfire method against public burn-severity maps, so that the second hazard type also has measured accuracy; then a multi-date radar baseline to reduce seasonal false alarms. Both address measured weaknesses rather than adding features. (Doc Chapter 16)</p></div>
+  </div>
+  <div class="qa">
+    <div class="q"><span class="n">112</span><span>What is the single most important design decision in AegisEO? <span class="lvl c">Challenging</span></span></div>
+    <div class="a"><p>Separating "the software prepares" from "a person decides", and enforcing it in code rather than in documentation: the agent physically cannot call an external tool, a warning needs a named approver and passes G18, every number in every text is checked against recorded evidence, and every decision is logged. Accuracy will always be imperfect with satellite data; this design makes the imperfection visible and keeps a responsible person in charge of what happens next.</p></div>
+  </div>
+</section>

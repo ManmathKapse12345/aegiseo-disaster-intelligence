@@ -1,0 +1,113 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 9</span>Technical architecture</h1>
+  <p class="lead">AegisEO is a two-part web application: an interface that runs in the browser and a server program that does the analysis. This chapter explains the parts, how they talk to each other, and why the system is built this way.</p>
+
+  <h2>9.1 The big picture</h2>
+  <p>A <dfn>web application</dfn> is a program used through a web browser. It is split between a <dfn>client</dfn> (the browser, which shows the interface) and a <dfn>server</dfn> (a program on a computer that stores data and does the heavy work). The code that runs in the browser is called the <dfn>frontend</dfn>; the code on the server is the <dfn>backend</dfn>. In AegisEO the frontend lives in the <code>frontend</code> folder and the backend in the <code>backend</code> folder.</p>
+  <p>The two parts communicate through an <dfn>API</dfn> (application programming interface): a fixed set of requests the server understands. Requests travel over <dfn>HTTP</dfn>, the protocol of the web, and data are exchanged as <dfn>JSON</dfn> (JavaScript Object Notation), a simple text format of named values and lists. AegisEO's API follows the <dfn>REST</dfn> style: each kind of thing has a web address (an <dfn>endpoint</dfn>), and the HTTP method says what to do with it, for example <code>GET /api/analyses/{id}</code> reads one check and <code>POST /api/analyses</code> creates one.</p>
+  <figure>
+    <div class="diagram" data-diagram="architecture"></div>
+    <figcaption><b>Figure 9.1</b> The components of AegisEO and how they communicate. Arrows show who calls whom. Dashed boxes are optional services that are switched off on the copy used for this report.</figcaption>
+  </figure>
+
+  <h2>9.2 The frontend (browser side)</h2>
+  <p>The interface is a <dfn>single-page application (SPA)</dfn>: the browser loads one HTML page and a JavaScript program once, and from then on the program redraws parts of the page itself and fetches data from the API, instead of loading a new page from the server for every click. It is written in <dfn>TypeScript</dfn>, a version of JavaScript in which every value has a declared type, so many mistakes are caught before the code runs.</p>
+  <ul>
+    <li><b>React</b> builds the interface from <dfn>components</dfn>: reusable functions that turn data into a piece of the page (for example <code>ReviewCard</code> draws one finding with its buttons). When the data change, React updates only what changed on screen.</li>
+    <li><b>React Router</b> maps web addresses to pages (<code>/check</code>, <code>/results/:id</code>, <code>/review</code> ...) in <code>frontend/src/App.tsx</code>. Old addresses from the first version redirect to the new pages.</li>
+    <li><b>TanStack Query</b> fetches data from the API, caches it, and refetches it on a schedule (<code>frontend/src/api/hooks.ts</code>). Running checks are re-read every 2 seconds, which is how the progress bar moves; this repeated asking is called <dfn>polling</dfn>.</li>
+    <li><b>MapLibre GL</b> draws the interactive maps with the computer's graphics hardware (WebGL). Background maps come from OpenFreeMap and EOX (Sentinel-2 cloudless 2020).</li>
+    <li>A <b>plain-language layer</b> turns backend values into sentences: <code>lib/meta.tsx</code> holds the vocabulary (names, safety-check explanations, statuses), <code>lib/plain.ts</code> builds sentences from real numbers, and <code>lib/limits.ts</code> reads the server's limits from <code>/api/config</code>.</li>
+    <li><b>Vite</b> is the build tool: during development it serves the code with instant reloads and forwards <code>/api</code> requests to the backend; for production it bundles and compresses the code. Pages other than Home are loaded only when visited, so the large map library (about 285 kB compressed) is not downloaded on the first visit; this is <dfn>code splitting</dfn>.</li>
+  </ul>
+
+  <h2>9.3 The backend (server side)</h2>
+  <p>The backend is a Python program built with <dfn>FastAPI</dfn>, a <dfn>web framework</dfn> (a library that handles the common work of a web server, such as receiving requests, routing them to the right function and sending responses). It is started by <dfn>Uvicorn</dfn>, the program that listens for network connections. The application is assembled in <code>backend/aegis/main.py</code>:</p>
+  <ul>
+    <li><b>Routers</b> group the endpoints: <code>api/routes_analyses.py</code> (creating checks, results, layers, reports, priority changes), <code>api/routes_review.py</code> (findings and warnings), <code>api/routes_system.py</code> (health, data sources, live alerts, case studies, place search, archive check, configuration, model, knowledge base, dashboard). About 37 API endpoints exist in total.</li>
+    <li><b>Validation</b>: every request body is described by a <dfn>Pydantic</dfn> model (<code>api/schemas.py</code>), a class that declares each field's type and allowed range. Invalid or unknown fields are rejected with HTTP 422 before any code runs.</li>
+    <li><b>Middleware</b> (code that runs around every request) attaches a request identifier, applies <dfn>rate limiting</dfn> (at most 240 changing requests per minute per client by default, otherwise HTTP 429), adds security headers, and records timing for monitoring.</li>
+    <li><b>Errors</b> always come back in one shape, <code>{"error": {"code", "message", "request_id"}}</code>, so the interface can turn them into plain advice.</li>
+    <li><b>Access control</b> (<code>api/deps.py</code>): when sign-in is enabled, requests carry a <dfn>bearer token</dfn> (a secret access code sent in the <code>Authorization</code> header) that maps to a user and role; endpoints declare the role they need.</li>
+    <li>When a built frontend exists in <code>frontend/dist</code>, the backend also serves it, so one process can host the whole application (used by the tunnel and Hugging Face deployments).</li>
+  </ul>
+
+  <h2>9.4 Background jobs</h2>
+  <p>A check takes minutes, far longer than a web request should wait. So <code>POST /api/analyses</code> only stores the request (status <i>queued</i>), hands its identifier to the <b>job manager</b> (<code>backend/aegis/jobs.py</code>) and replies at once. The job manager runs checks on a <dfn>thread pool</dfn>: a fixed number of <dfn>threads</dfn> (independent lines of execution inside one program), two by default (<code>AEGIS_WORKER_THREADS</code>). Python normally lets only one thread run Python code at a time (a mechanism called the <dfn>global interpreter lock</dfn>), but the heavy numerical libraries used here (NumPy, GDAL, PyTorch) release that lock while they compute, so two checks really do run in parallel.</p>
+  <p>The database row of a check is the single source of truth. If the server restarts, queued checks are submitted again and checks that were running are marked <i>interrupted</i>, so nothing stays "running" forever. A person can press Stop: the request sets a flag that the agent checks between steps (<dfn>cooperative cancellation</dfn>).</p>
+
+  <h2>9.5 The agent</h2>
+  <p>The analysis is organised as an agent (introduced in Section 1.3). Its parts are in <code>backend/aegis/agents</code>:</p>
+  <table class="compact">
+    <thead><tr><th style="width:22%">Part</th><th>Responsibility</th></tr></thead>
+    <tbody>
+      <tr><td><b>Orchestrator</b><br/><code>orchestrator.py</code></td><td>Owns the goal, the ten-step plan and the shared state; runs the specialists in order; applies the safety checks between steps; creates findings; saves results; sets the final status.</td></tr>
+      <tr><td><b>Specialists</b><br/><code>specialists.py</code></td><td>Five agents with one job each: data acquisition (find, choose and load images), perception (detect change), impact (exposure), prioritisation (squares and scores) and reporting (summary, guidance, draft warnings).</td></tr>
+      <tr><td><b>State</b><br/><code>state.py</code></td><td>The goal, plan steps with status, <i>facts</i> (named values with units and their evidence, such as <code>affected_area_km2</code>), the evidence register (image identifiers, model version, data sources), recorded decisions with reasons and rule numbers, flags, warnings and escalations.</td></tr>
+      <tr><td><b>Tools</b><br/><code>tools.py</code>, <code>toolbox.py</code></td><td>20 named tools, each with a side-effect class. The executor allows only registered tools, enforces the side-effect policy and a budget of 120 calls per check, supports cancellation, and records every call with arguments, status and duration.</td></tr>
+      <tr><td><b>Safety checks</b><br/><code>guardrails.py</code></td><td>G01-G18 (Chapter 6).</td></tr>
+      <tr><td><b>Memory</b><br/><code>memory.py</code></td><td>Earlier checks of the same area and their corrections; the method knowledge base with TF-IDF search.</td></tr>
+      <tr><td><b>Narrative</b><br/><code>narrative.py</code></td><td>Builds the summary and draft warnings from facts with templates; checks numbers and wording; optionally asks the Claude language model to word the summary.</td></tr>
+      <tr><td><b>Recorder</b><br/><code>recorder.py</code></td><td>Writes every step, tool call and safety check to the database: the "full step-by-step record" in the interface.</td></tr>
+    </tbody>
+  </table>
+  <p>The decisions are made by documented rules (eight rules numbered P0 to P9, with P6 and P7 unused: coarsen the grid if too large, take the earliest radar pass, choose the clearest optical image, extend the search, match radar orbits, re-run radar-led under heavy cloud, continue without a failed source, use built-up land when population fails), not by a language model. This makes runs repeatable and every choice explainable. A language model is used only, and only if a key is configured, to word the summary; its draft is accepted only if every number and citation passes the same checks as the templates (G16, G17), and it never sees images or produces measurements. On the copy used for this report no key is configured, so all text comes from the templates.</p>
+
+  <h2>9.6 One check from button press to result</h2>
+  <figure>
+    <div class="diagram" data-diagram="sequence"></div>
+    <figcaption><b>Figure 9.2</b> The messages exchanged during one check. Steps 6-9 repeat as the agent works through its plan; step 10 repeats every two seconds until the check finishes.</figcaption>
+  </figure>
+
+  <h2>9.7 Data access and reliability</h2>
+  <p>Every call to an outside service goes through a <b>resilient HTTP client</b> (<code>backend/aegis/net/http.py</code>) with these protections:</p>
+  <ul>
+    <li><b>Timeouts and retries</b>: a request that hangs is abandoned; temporary failures are retried a few times with growing, randomised waits (<dfn>exponential back-off with jitter</dfn>), so many clients do not retry at the same moment.</li>
+    <li><b>Circuit breaker</b>: after repeated failures of one service, further calls fail immediately for a minute instead of waiting for timeouts, like an electrical breaker that trips to protect the circuit.</li>
+    <li><b>Cache</b>: answers are stored on disk for a time that depends on the source (for example 24 hours for OpenStreetMap, 30 days for WorldPop totals). If a service is down, the last good answer can be used and is flagged as <i>stale</i>.</li>
+    <li><b>Offline mode</b> (<code>AEGIS_OFFLINE=true</code>): no network at all, cached data only (used by the automated tests).</li>
+  </ul>
+  <p>Satellite images are read with <dfn>rasterio</dfn>, a Python library built on <dfn>GDAL</dfn> (the Geospatial Data Abstraction Library, the standard engine for reading and reprojecting geographic images). Only the window covering the area is read, warped directly onto the analysis grid, and saved as a GeoTIFF in a cache keyed by image, band and grid, which is why repeated checks of the same area take seconds.</p>
+
+  <h2>9.8 Storage</h2>
+  <p>Results are stored in a <dfn>relational database</dfn>: data organised in tables of rows and columns that can be queried with <dfn>SQL</dfn> (Structured Query Language). The code does not write SQL by hand; it uses <dfn>SQLAlchemy</dfn>, an <dfn>object-relational mapper (ORM)</dfn> that maps Python classes (in <code>backend/aegis/db.py</code>) to tables. The same code works with two database engines:</p>
+  <ul>
+    <li><dfn>SQLite</dfn>, a database stored in a single file (<code>data/aegis.db</code>), used by default because it needs no installation;</li>
+    <li><dfn>PostgreSQL</dfn> with the <dfn>PostGIS</dfn> extension (which adds geographic types and spatial indexes), used in the Docker deployment. When PostGIS is present, AegisEO adds geometry columns with spatial indexes automatically.</li>
+  </ul>
+  <p>There are 13 tables: <code>analyses</code>, <code>agent_steps</code>, <code>tool_calls</code>, <code>guardrail_checks</code>, <code>observations</code> (images used), <code>detections</code> (detected polygons), <code>priority_cells</code>, <code>exposed_features</code> (facilities and settlements), <code>alerts</code>, <code>review_tasks</code>, <code>reports</code>, <code>audit_log</code> and <code>benchmark_runs</code>. Files (map layers, GeoTIFF exports, PDF, CSV, GeoJSON) are stored under <code>data/artifacts/&lt;check id&gt;</code>, and downloaded image windows under <code>data/cache</code>.</p>
+
+  <h2>9.9 Deployment options</h2>
+  <table class="compact">
+    <thead><tr><th style="width:22%">Option</th><th>How it runs</th><th style="width:26%">Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Local development (used for this report)</td><td>Uvicorn serves the backend on port 8000; Vite serves the frontend on port 5173 and forwards <code>/api</code>.</td><td>SQLite; the quickest way to demonstrate.</td></tr>
+      <tr><td>Docker Compose</td><td><dfn>Docker</dfn> runs each part in a <dfn>container</dfn> (a packaged, isolated environment with everything a program needs). Three containers: PostGIS database, API, and <dfn>nginx</dfn> (a web server that serves the built interface and forwards <code>/api</code> to the API, a <dfn>reverse proxy</dfn>).</td><td><code>docker-compose.yml</code>; persistent; content-security policy set by nginx.</td></tr>
+      <tr><td>Hugging Face Spaces</td><td>One container serving both API and interface on port 7860.</td><td>Free hosting; SQLite storage is lost when the Space restarts.</td></tr>
+      <tr><td>Cloudflare quick tunnel</td><td>A script builds the interface, starts the backend locally and opens a temporary public https link.</td><td><code>deploy/tunnel/start-public.ps1</code>; the link changes on every start.</td></tr>
+      <tr><td>Oracle Cloud (ARM server)</td><td>Docker Compose with the Caddy web server for HTTPS.</td><td><code>deploy/oracle</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>9.10 Monitoring and security</h2>
+  <ul>
+    <li><b>Logs</b> are written as structured JSON lines with the request and check identifiers.</li>
+    <li><b>Metrics</b>: <code>/metrics</code> exposes counters and timings (requests, tool calls, safety-check outcomes, jobs, external calls) in the format of <dfn>Prometheus</dfn>, a common monitoring system. <code>/api/health/ready</code> reports whether the database and model are ready.</li>
+    <li><b>Security</b>: optional sign-in with roles; rate limiting; strict input validation; file downloads protected against <dfn>path traversal</dfn> (tricks such as <code>../</code> in a file name that try to read files outside the allowed folder); a <dfn>content-security policy (CSP)</dfn> that tells browsers which sources the page may load scripts and images from; secrets only in environment variables and never in the frontend or logs; and the failure-injection switch used by tests is refused for real checks.</li>
+  </ul>
+
+  <h2>9.11 Key design decisions</h2>
+  <table class="compact">
+    <thead><tr><th style="width:22%">Decision</th><th style="width:30%">Choice</th><th>Reason and trade-off</th></tr></thead>
+    <tbody>
+      <tr><td>Who decides inside the agent</td><td>Documented rules, not a language model</td><td>Repeatable, testable, auditable; a language model is optional and only for wording, under the same number checks.</td></tr>
+      <tr><td>Image access</td><td>Planetary Computer STAC + windowed COG reads</td><td>Free, no account, both Sentinels plus elevation, water and land cover in one catalogue; only the needed pixels are downloaded.</td></tr>
+      <tr><td>Common grid</td><td>UTM of the area, 20 m, coarsened above 2.6 million pixels</td><td>Metric pixels for areas and distances; bounded memory and time; loses detail for very large areas.</td></tr>
+      <tr><td>Flood model</td><td>Two-branch gated-fusion U-Net plus a radar specialist</td><td>Best measured robustness when optical images are missing or cloudy, chosen on validation data.</td></tr>
+      <tr><td>Background work</td><td>In-process thread pool</td><td>Simple and enough for one server; scaling to many servers would need a job queue.</td></tr>
+      <tr><td>Database</td><td>SQLAlchemy over SQLite or PostgreSQL/PostGIS</td><td>Zero setup locally, spatial database in deployment, one code path.</td></tr>
+      <tr><td>Autonomy</td><td>Advisory: drafts only, a named person approves</td><td>Mistakes in disaster response are costly; accountability stays with people.</td></tr>
+      <tr><td>Interface limits</td><td>Read from <code>/api/config</code> (new)</td><td>The interface can never disagree with the server's real limits.</td></tr>
+    </tbody>
+  </table>
+</section>

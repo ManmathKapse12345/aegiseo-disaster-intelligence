@@ -1,0 +1,12 @@
+{
+  "name": "aegiseo-deliverables",
+  "private": true,
+  "description": "Builds the AegisEO documentation PDF, viva PDF and presentation from the HTML/JS sources in this folder.",
+  "scripts": {
+    "pdf": "node build_pdfs.cjs",
+    "pptx": "node build_pptx.cjs"
+  },
+  "dependencies": {
+    "pptxgenjs": "3.12.0"
+  }
+}

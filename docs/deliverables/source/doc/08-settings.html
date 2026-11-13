@@ -1,0 +1,55 @@
+<section class="chapter">
+  <h1><span class="num">Chapter 8</span>Detection and ranking settings</h1>
+  <p class="lead">Step 4 of the wizard contains an optional section that was previously titled "Expert settings (optional - most people never need these)". It is now called <b>Detection and ranking settings</b>, because that is what it controls: how AegisEO decides which pixels count as changed, and how it ranks the priority squares. Every setting now carries a visible explanation and its default value.</p>
+
+  <h2>8.1 Why the settings exist</h2>
+  <p>The defaults are the values with which the flood model was evaluated, and they suit most checks. But a result can call for an adjustment: a first run may show many small specks of false alarm, a team may want finer detail over a small town, or an organisation may weigh roads more heavily than population. The settings make such adjustments possible without editing code, and they are sent to the server as part of the request. Only settings that the chosen method actually uses are shown and sent: the flood threshold and uncertainty samples appear only for floods; the burn threshold only for wildfires. If nothing is changed, nothing is sent and the server uses its defaults. Practice runs have fixed settings.</p>
+  <figure class="narrow"><img src="../../screenshots/16-step4-settings.jpg" alt="Detection and ranking settings" /><figcaption><b>Figure 8.1</b> The renamed settings section with explanations and defaults (shown here for a flood check).</figcaption></figure>
+
+  <h2>8.2 Image detail</h2>
+  <table class="compact">
+    <thead><tr><th style="width:17%">Setting</th><th style="width:15%">Range / default</th><th>What it controls and the effect of changing it</th></tr></thead>
+    <tbody>
+      <tr><td><b>Pixel size</b><br/><code>resolution_m</code></td><td>10-60 m in the interface (API 10-100)<br/>default 20 m (setting <code>AEGIS_DEFAULT_RESOLUTION_M</code>)</td><td>The size of one square of the common grid on which all images are analysed (<code>geo/grid.py</code>). Smaller pixels show narrower features; halving the size quadruples the number of pixels, so the check takes longer and needs more memory. 10 m is the finest the satellites provide (and the resolution the flood model was trained on); 20 m matches the real sharpness of the radar and of the optical infrared bands. If the area would exceed 2.6 million pixels, the server coarsens the size automatically; the interface now warns when that will happen. <b>When to change:</b> 10 m for a small area where detail matters (a town, a narrow valley); 30-60 m for a quick, coarse first look.</td></tr>
+      <tr><td><b>Smallest patch to count</b><br/><code>min_mapping_unit_ha</code></td><td>0.1-5 ha (API 0.05-20)<br/>default 0.5 ha</td><td>After pixels are marked, connected groups smaller than this area are removed as noise, a <dfn>minimum mapping unit</dfn>. 1 hectare is 100 m × 100 m; at 20 m pixels, 0.5 ha is 13 pixels. Larger values give a cleaner map but drop small real patches (ponds, narrow flooded roads); smaller values keep them and also more radar speckle. Landslides use half the value (at least 0.2 ha). <b>When to change:</b> raise it if a result is covered in specks; lower it when small features matter and the pixel size allows.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>8.3 What counts as changed</h2>
+  <table class="compact">
+    <thead><tr><th style="width:17%">Setting</th><th style="width:15%">Range / default</th><th>What it controls and the effect of changing it</th></tr></thead>
+    <tbody>
+      <tr><td><b>Minimum flood probability to mark a pixel</b><br/><code>prob_threshold</code><br/><span class="small">floods only</span></td><td>0.3-0.8 (API 0.2-0.9)<br/>default 0.5</td><td>A pixel is marked as newly flooded only if P(new water) is at least this value. Higher values (0.7) keep only confident pixels: fewer false alarms, more missed flooding (higher precision, lower recall). Lower values (0.35) do the opposite. Because the probabilities are calibrated, 0.5 means "more likely flooded than not". <b>When to change:</b> raise it if obviously dry land was marked; lower it if visible water was missed.</td></tr>
+      <tr><td><b>Uncertainty samples (Monte-Carlo dropout)</b><br/><code>mc_samples</code><br/><span class="small">floods only</span></td><td>2-12 (API 1-16)<br/>default 6</td><td>How many times the model analyses the 'after' image with a different random part of its last layer switched off (the 'before' image gets half as many). The answers are averaged into the probability, and their spread is the uncertainty. More samples give a steadier uncertainty map and take proportionally longer in the detection step (which is a small part of a check). <b>Minimum raised from 1 to 2 in this round:</b> with a single pass the measured uncertainty is exactly zero everywhere, so the "Model uncertainty" layer becomes blank and safety check G13 can never ask a person because of uncertainty. <b>When to change:</b> rarely; increase for a steadier uncertainty map.</td></tr>
+      <tr><td><b>Minimum burn index (dNBR) to mark a pixel</b><br/><code>dnbr_threshold</code><br/><span class="small">wildfires only</span></td><td>0.05-0.5<br/>default 0.10</td><td>A pixel that had vegetation before is marked burned when dNBR reaches this value. 0.10 is the start of "low" severity on the USGS scale; raising it (for example to 0.27, the start of "moderate-low") keeps only clearer burns and avoids false alarms from harvested fields or drying grass. <b>When to change:</b> raise it in farmland or dry-season scenes with many small false burns.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>8.4 How squares are ranked</h2>
+  <p>These weights enter the score formula of Section 5.5. Within each group (H or E) a factor's weight is divided by the group's total, so only the relative sizes inside a group matter: 0.55 and 0.45 give the same result as 1.1 and 0.9. A weight of 0 ignores that factor.</p>
+  <table class="compact">
+    <thead><tr><th style="width:24%">Weight (API field)</th><th style="width:9%">Default</th><th>Factor it weighs (how the factor is computed in prioritize.py)</th></tr></thead>
+    <tbody>
+      <tr><td>Share of the square that changed (<code>extent</code>)</td><td>0.55</td><td>Changed share of the square, divided by 0.5 and capped at 1, so half a square or more counts fully.</td></tr>
+      <tr><td>Strength of the change (<code>intensity</code>)</td><td>0.45</td><td>Average probability of the changed pixels (wildfire: severity class ÷ 4).</td></tr>
+      <tr><td>People living in the changed part (<code>population</code>)</td><td>0.45</td><td>log(1 + people) ÷ log(1 + 5,000 × square area), capped at 1. Without population data: built-up share of the changed part relative to 25% of the square.</td></tr>
+      <tr><td>Important places (<code>critical_facilities</code>)</td><td>0.35</td><td>1 − e<sup>−w</sup>, where w adds a weight per place (hospital 1.0; fire or ambulance station 0.8; shelter 0.7; clinic, police, power and water works 0.6; school 0.5), halved for places only within 500 m.</td></tr>
+      <tr><td>Roads crossing the changed part (<code>access</code>)</td><td>0.20</td><td>Kilometres of main road in the changed part ÷ (2 km per km² × square area), capped at 1.</td></tr>
+      <tr><td>Balance between H and E (<code>hazard_exponent</code>, a)</td><td>0.5 (UI 0.2-0.8)</td><td>The exponent a in 100 × H<sup>a</sup> × E<sup>1−a</sup>. Higher a makes the score depend more on how much changed; lower a, more on who and what is there.</td></tr>
+    </tbody>
+  </table>
+  <p><b>When to change the weights:</b> when an organisation's priorities differ, for example increasing <i>access</i> for a team planning road clearance, or <i>critical_facilities</i> for health-service planning. The sensitivity analysis on each square then shows how much the ranking depends on such choices.</p>
+  <div class="box limit"><span class="bt">Validation added in this round</span>The score needs at least one positive weight in each group. Previously, setting both "change found" weights (or all three "people and places" weights) to 0 was accepted, and the check failed only at the ranking step, after all downloads. Now the interface blocks Start with an explanation, and the API rejects such a request immediately with HTTP 422 (validator in <code>backend/aegis/api/schemas.py</code>, tested in <code>test_api.py</code>).</div>
+
+  <h2>8.5 Settings available only through the API</h2>
+  <p>Two flood parameters are accepted by the API but not shown in the interface: <code>max_hand_m</code> (default 15 m: water further above the local drainage is removed) and <code>max_slope_deg</code> (default 8°: water on steeper slopes is removed). Specialists can send them in the <code>detection</code> object of <code>POST /api/analyses</code>. The defaults remove radar shadow on hillsides; raising them would keep more water in hilly terrain at the cost of more false alarms.</p>
+
+  <h2>8.6 How the settings travel and where they are recorded</h2>
+  <ol>
+    <li>The wizard keeps the values in its draft state (<code>frontend/src/pages/check/draft.ts</code>, saved in the browser tab so a reload does not lose them).</li>
+    <li>On Start, only if something was changed, it sends <code>resolution_m</code>, <code>weights</code> and a <code>detection</code> object with the parameters relevant to the disaster type (<code>CheckWizard.tsx</code>).</li>
+    <li>The API validates them strictly (unknown fields and out-of-range values are rejected) and stores them in the check's <code>params</code> (<code>analyses</code> table).</li>
+    <li>The job manager turns them into the agent's <code>RunConfig</code> (<code>jobs.py</code>), and the detection and ranking functions use them.</li>
+    <li>The values used appear in the method description under "How we know" (for example "Threshold P(flood) ≥ 0.50 ... minimum mapping unit of 0.5 ha") and in the full record; the ranking weights are stored with the priority results.</li>
+  </ol>
+</section>

@@ -32,7 +32,7 @@ test("phone: bottom navigation, readable pages, no sideways scrolling", async ({
   await noSideScroll(page);
 
   await tabs.getByRole("link", { name: "About" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: /Satellite photos that show/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: /Satellite images that show/ })).toBeVisible();
   await noSideScroll(page);
 
   // body text stays comfortably large on a phone

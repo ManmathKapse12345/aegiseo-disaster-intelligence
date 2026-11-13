@@ -65,6 +65,37 @@ def me(who: Identity = Depends(get_identity)) -> dict[str, Any]:
     return {"user": who.user, "role": who.role, "auth_enabled": get_settings().auth_enabled}
 
 
+@router.get("/api/config")
+def public_config() -> dict[str, Any]:
+    """Processing limits and optional features of this server, so the UI never contradicts the backend.
+
+    Only limits and on/off switches are returned - never URLs, keys or other secrets.
+    """
+    from aegis.agents.guardrails import MAX_PRE_POST_GAP_DAYS, MAX_WINDOW_DAYS
+
+    s = get_settings()
+    return {
+        "limits": {
+            "min_aoi_km2": s.min_aoi_km2,
+            "max_aoi_km2": s.max_aoi_km2,  # guardrail G02 and API validation (AEGIS_MAX_AOI_KM2)
+            "default_resolution_m": s.default_resolution_m,
+            "max_grid_pixels": s.max_grid_pixels,
+            # largest area that still fits the pixel budget at the default resolution (approximate: the grid
+            # covers the area's bounding box in UTM, which is slightly larger than the area itself)
+            "full_detail_max_km2": round(s.max_grid_pixels * s.default_resolution_m**2 / 1e6),
+            "max_window_days": MAX_WINDOW_DAYS,  # guardrail G03
+            "max_pre_post_gap_days": MAX_PRE_POST_GAP_DAYS,  # guardrail G06 (warning)
+        },
+        "features": {
+            "alert_delivery": bool(s.alert_webhook_url.get_secret_value()),  # approved warnings are POSTed to a webhook
+            "llm_summary": s.llm_available,
+            "firms_history": bool(s.firms_map_key.get_secret_value()),
+            "auth_enabled": s.auth_enabled,
+            "offline": s.offline,
+        },
+    }
+
+
 @router.get("/api/sources")
 def sources(refresh: bool = False) -> list[dict[str, Any]]:
     return source_status(get_job_manager().services, refresh=refresh)

@@ -39,6 +39,8 @@ def main() -> None:
         root = Path(tmp)
         with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
             tar.extractall(root, filter="data")
+        # the report/slides/screenshots are not needed to run the app; keep the Space small
+        shutil.rmtree(root / "docs" / "deliverables", ignore_errors=True)
         shutil.copy(HERE / "Dockerfile", root / "Dockerfile")
         shutil.copy(HERE / "README.md", root / "README.md")
         # keep the Space's own .gitattributes (Hub storage rules for binary files such as checkpoints)
